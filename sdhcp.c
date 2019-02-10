@@ -107,7 +107,7 @@ unsigned char server[4];
 unsigned char client[4];
 static unsigned char mask[4];
 static unsigned char router[4];
-static unsigned char dns[4];
+static unsigned char dns[8];
 
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
@@ -185,7 +185,7 @@ cat(int dfd, char *src)
 }
 
 static void
-setdns(unsigned char dns[4])
+setdns(unsigned char dns[])
 {
 	char buf[128];
 	int fd;
@@ -198,6 +198,10 @@ setdns(unsigned char dns[4])
 	if (snprintf(buf, sizeof(buf) - 1, "\nnameserver %d.%d.%d.%d\n",
 	         dns[0], dns[1], dns[2], dns[3]) > 0)
 		write(fd, buf, strlen(buf));
+	if (dns[4])
+		if (snprintf(buf, sizeof(buf) - 1, "\nnameserver %d.%d.%d.%d\n",
+					 dns[4], dns[5], dns[6], dns[7]) > 0)
+			write(fd, buf, strlen(buf));
 	cat(fd, "/etc/resolv.conf.tail");
 	close(fd);
 }
@@ -341,6 +345,10 @@ acceptlease(void)
 		setenv("ROUTER", buf, 1);
 		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[0], dns[1], dns[2], dns[3]);
 		setenv("DNS", buf, 1);
+		if (dns[4]) {
+			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[4], dns[5], dns[6], dns[7]);
+			setenv("DNS2", buf, 1);
+		}
 		system(program);
 	}
 }
