@@ -64,7 +64,9 @@ enum {
 	OBnameserver =       5,
 	OBdnsserver =        6,
 	OBhostname =        12,
+	OBdomainname =		15,
 	OBbaddr =           28,
+	OBntp =				42,
 	ODipaddr =          50, /* 0x32 */
 	ODlease =           51,
 	ODoverload =        52,
@@ -86,7 +88,8 @@ static Bootp bp;
 static const unsigned char magic[] = { 99, 130, 83, 99 };
 
 static const unsigned char params[] = {
-	OBmask, OBrouter, OBdnsserver, ODlease, ODrenewaltime, ODrebindingtime
+	OBmask, OBrouter, OBdnsserver, OBdomainname, OBntp,
+	ODlease, ODrenewaltime, ODrebindingtime
 };
 
 /* One socket to rule them all */
@@ -108,6 +111,8 @@ unsigned char client[4];
 static unsigned char mask[4];
 static unsigned char router[4];
 static unsigned char dns[8];
+static unsigned char ntp[12];
+static char domainname[32];
 
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
@@ -199,9 +204,13 @@ setdns(unsigned char dns[])
 	         dns[0], dns[1], dns[2], dns[3]) > 0)
 		write(fd, buf, strlen(buf));
 	if (dns[4])
-		if (snprintf(buf, sizeof(buf) - 1, "\nnameserver %d.%d.%d.%d\n",
+		if (snprintf(buf, sizeof(buf) - 1, "nameserver %d.%d.%d.%d\n",
 					 dns[4], dns[5], dns[6], dns[7]) > 0)
 			write(fd, buf, strlen(buf));
+	if (*domainname) {
+		snprintf(buf, sizeof(buf) - 1, "search %s\n", domainname);
+		write(fd, buf, strlen(buf));
+	}
 	cat(fd, "/etc/resolv.conf.tail");
 	close(fd);
 }
@@ -349,6 +358,22 @@ acceptlease(void)
 			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[4], dns[5], dns[6], dns[7]);
 			setenv("DNS2", buf, 1);
 		}
+		if (*domainname) {
+			strlcpy(buf, domainname, sizeof(buf));
+			setenv("DOMAIN", buf, 1);
+		}
+		if (ntp[0]) {
+			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[0], ntp[1], ntp[2], ntp[3]);
+			setenv("NTP1", buf, 1);
+		}
+		if (ntp[4]) {
+			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[4], ntp[5], ntp[6], ntp[7]);
+			setenv("NTP2", buf, 1);
+		}
+		if (ntp[8]) {
+			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[8], ntp[9], ntp[10], ntp[11]);
+			setenv("NTP3", buf, 1);
+		}
 		system(program);
 	}
 }
@@ -428,6 +453,8 @@ Bound:
 	optget(&bp, mask, OBmask, sizeof(mask));
 	optget(&bp, router, OBrouter, sizeof(router));
 	optget(&bp, dns, OBdnsserver, sizeof(dns));
+	optget(&bp, ntp, OBntp, sizeof(ntp));
+	optget(&bp, domainname, OBdomainname, sizeof(domainname - 1));
 	optget(&bp, &renewaltime, ODrenewaltime, sizeof(renewaltime));
 	optget(&bp, &rebindingtime, ODrebindingtime, sizeof(rebindingtime));
 	optget(&bp, &lease, ODlease, sizeof(lease));
