@@ -10,3 +10,6 @@ LD        = $(CC)
 CPPFLAGS  = -D_DEFAULT_SOURCE
 CFLAGS    = -Wall -Wextra -pedantic -std=c99 $(CPPFLAGS)
 LDFLAGS   = -s
+
+# This is Linux specific
+CFLAGS += -DUSE_RAW_SOCKET

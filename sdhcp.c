@@ -1,9 +1,9 @@
+#include <sys/types.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
-#include <sys/timerfd.h>
 
 #include <netinet/in.h>
-#include <net/if.h>
+#include <netinet/if_ether.h>
 #include <net/route.h>
 
 #include <errno.h>
@@ -82,23 +82,29 @@ enum {
 	OBend =            255,
 };
 
-enum { Broadcast, Unicast };
-
 static Bootp bp;
-static unsigned char magic[] = { 99, 130, 83, 99 };
+static const unsigned char magic[] = { 99, 130, 83, 99 };
+
+static const unsigned char params[] = {
+	OBmask, OBrouter, OBdnsserver, ODlease, ODrenewaltime, ODrebindingtime
+};
+
+/* One socket to rule them all */
+int sock = -1;
 
 /* conf */
 static unsigned char xid[sizeof(bp.xid)];
-static unsigned char hwaddr[16];
-static char hostname[HOST_NAME_MAX + 1];
+unsigned char hwaddr[ETHER_ADDR_LEN];
+static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static time_t starttime;
-static char *ifname = "eth0";
-static unsigned char cid[16];
+char *ifname = "eth0";
+static unsigned char cid[24];
+static int cid_len;
 static char *program = "";
-static int sock, timers[3];
+int timers[N_TIMERS];
 /* sav */
-static unsigned char server[4];
-static unsigned char client[4];
+unsigned char server[4];
+unsigned char client[4];
 static unsigned char mask[4];
 static unsigned char router[4];
 static unsigned char dns[4];
@@ -106,8 +112,6 @@ static unsigned char dns[4];
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
 static int fflag = 0; /* run in foreground */
-
-#define IP(a, b, c, d) (unsigned char[4]){ a, b, c, d }
 
 static void
 hnput(unsigned char *dst, uint32_t src, size_t n)
@@ -118,7 +122,7 @@ hnput(unsigned char *dst, uint32_t src, size_t n)
 		dst[i] = (src >> (n * 8)) & 0xff;
 }
 
-static struct sockaddr *
+struct sockaddr *
 iptoaddr(struct sockaddr *ifaddr, unsigned char ip[4], int port)
 {
 	struct sockaddr_in *in = (struct sockaddr_in *)ifaddr;
@@ -130,39 +134,16 @@ iptoaddr(struct sockaddr *ifaddr, unsigned char ip[4], int port)
 	return ifaddr;
 }
 
-/* sendto UDP wrapper */
-static ssize_t
-udpsend(unsigned char ip[4], int fd, void *data, size_t n)
-{
-	struct sockaddr addr;
-	socklen_t addrlen = sizeof(addr);
-	ssize_t sent;
-
-	iptoaddr(&addr, ip, 67); /* bootp server */
-	if ((sent = sendto(fd, data, n, 0, &addr, addrlen)) == -1)
-		eprintf("sendto:");
-
-	return sent;
-}
-
-/* recvfrom UDP wrapper */
-static ssize_t
-udprecv(unsigned char ip[4], int fd, void *data, size_t n)
-{
-	struct sockaddr addr;
-	socklen_t addrlen = sizeof(addr);
-	ssize_t r;
-
-	iptoaddr(&addr, ip, 68); /* bootp client */
-	if ((r = recvfrom(fd, data, n, 0, &addr, &addrlen)) == -1)
-		eprintf("recvfrom:");
-
-	return r;
-}
-
 static void
 setip(unsigned char ip[4], unsigned char mask[4], unsigned char gateway[4])
 {
+#ifndef __linux__
+	/* TODO I believe this could work under other OSes. But since the
+	 * -e callout makes it so easy to work around this, I am just
+	 * going to leave it out for now.
+	 */
+	(void)ip; (void)mask; (void)gateway;
+#else
 	struct ifreq ifreq;
 	struct rtentry rtreq;
 	int fd;
@@ -187,6 +168,7 @@ setip(unsigned char ip[4], unsigned char mask[4], unsigned char gateway[4])
 	ioctl(fd, SIOCADDRT, &rtreq);
 
 	close(fd);
+#endif
 }
 
 static void
@@ -245,7 +227,7 @@ optget(Bootp *bp, void *data, int opt, int n)
 }
 
 static unsigned char *
-optput(unsigned char *p, int opt, unsigned char *data, size_t len)
+optput(unsigned char *p, int opt, const unsigned char *data, size_t len)
 {
 	*p++ = opt;
 	*p++ = (unsigned char)len;
@@ -267,7 +249,7 @@ hnoptput(unsigned char *p, int opt, uint32_t data, size_t len)
 static void
 dhcpsend(int type, int how)
 {
-	unsigned char *ip, *p;
+	unsigned char *p;
 
 	memset(&bp, 0, sizeof(bp));
 	hnput(bp.op, Bootrequest, 1);
@@ -277,10 +259,10 @@ dhcpsend(int type, int how)
 	hnput(bp.flags, Fbroadcast, sizeof(bp.flags));
 	hnput(bp.secs, time(NULL) - starttime, sizeof(bp.secs));
 	memcpy(bp.magic, magic, sizeof(bp.magic));
-	memcpy(bp.chaddr, hwaddr, sizeof(bp.chaddr));
+	memcpy(bp.chaddr, hwaddr, sizeof(hwaddr));
 	p = bp.optdata;
 	p = hnoptput(p, ODtype, type, 1);
-	p = optput(p, ODclientid, cid, sizeof(cid));
+	p = optput(p, ODclientid, cid, cid_len);
 	p = optput(p, OBhostname, (unsigned char *)hostname, strlen(hostname));
 
 	switch (type) {
@@ -290,6 +272,7 @@ dhcpsend(int type, int how)
 		/* memcpy(bp.ciaddr, client, sizeof bp.ciaddr); */
 		p = optput(p, ODipaddr, client, sizeof(client));
 		p = optput(p, ODserverid, server, sizeof(server));
+		p = optput(p, ODparams, params, sizeof(params));
 		break;
 	case DHCPrelease:
 		memcpy(bp.ciaddr, client, sizeof(client));
@@ -299,8 +282,7 @@ dhcpsend(int type, int how)
 	}
 	*p++ = OBend;
 
-	ip = (how == Broadcast) ? IP(255, 255, 255, 255) : server;
-	udpsend(ip, sock, &bp, p - (unsigned char *)&bp);
+	udpsend(&bp, p - (unsigned char *)&bp, how);
 }
 
 static int
@@ -315,11 +297,12 @@ dhcprecv(void)
 	};
 	uint64_t n;
 
-	if (poll(pfd, LEN(pfd), -1) == -1)
-		eprintf("poll:");
+	while (poll(pfd, LEN(pfd), -1) == -1)
+		if (errno != EINTR)
+			eprintf("poll:");
 	if (pfd[0].revents) {
 		memset(&bp, 0, sizeof(bp));
-		udprecv(IP(255, 255, 255, 255), sock, &bp, sizeof(bp));
+		udprecv(&bp, sizeof(bp));
 		optget(&bp, &type, ODtype, sizeof(type));
 		return type;
 	}
@@ -389,10 +372,11 @@ static void
 run(void)
 {
 	int forked = 0, t;
-	struct itimerspec timeout = { 0 };
+	struct itimerspec timeout = { { 0, 0 }, { 0, 0 } };
 	uint32_t renewaltime, rebindingtime, lease;
 
 Init:
+	memset(client, 0, sizeof(client));
 	dhcpsend(DHCPdiscover, Broadcast);
 	timeout.it_value.tv_sec = 1;
 	timeout.it_value.tv_nsec = 0;
@@ -431,6 +415,8 @@ Requesting:
 	/* no response from DHCPREQUEST after several attempts, go to INIT */
 	goto Init;
 Bound:
+	close_socket(); /* currently raw sockets only */
+
 	optget(&bp, mask, OBmask, sizeof(mask));
 	optget(&bp, router, OBrouter, sizeof(router));
 	optget(&bp, dns, OBdnsserver, sizeof(dns));
@@ -441,12 +427,14 @@ Bound:
 	rebindingtime = ntohl(rebindingtime);
 	lease = ntohl(lease);
 	acceptlease();
-	fputs("Congrats! You should be on the 'net.\n", stdout);
+	if (!forked)
+		fputs("Congrats! You should be on the 'net.\n", stdout);
 	if (!fflag && !forked) {
 		if (fork())
 			exit(0);
-		forked = 1;
+		create_timers(1);
 	}
+	forked = 1; /* doesn't hurt to always set this */
 	timeout.it_value.tv_sec = renewaltime;
 	settimeout(0, &timeout);
 	timeout.it_value.tv_sec = rebindingtime;
@@ -511,14 +499,38 @@ usage(void)
 	eprintf("usage: %s [-d] [-e program] [-f] [-i] [ifname] [clientid]\n", argv0);
 }
 
+static uint8_t fromhex(char nibble)
+{
+	if (nibble >= '0' && nibble <= '9')
+		return nibble - '0';
+	else if (nibble >= 'a' && nibble <= 'f')
+		return nibble - 'a' + 10;
+	else if (nibble >= 'A' && nibble <= 'F')
+		return nibble - 'A' + 10;
+	else
+		eprintf("Bad nibble %c\n", nibble);
+	return 0; // unreachable
+}
+
+static int str2bytes(const char *str, uint8_t *bytes, int len)
+{
+	int slen = strlen(str);
+	if ((slen & 1) || slen > (len * 2))
+		printf("invalid CID");
+
+	while (*str) {
+		*bytes = (fromhex(*str++) << 4);
+		*bytes++ |= fromhex(*str++);
+	}
+
+	return slen / 2;
+}
+
 int
 main(int argc, char *argv[])
 {
-	int bcast = 1;
 	struct ifreq ifreq;
-	struct sockaddr addr;
 	int rnd;
-	size_t i;
 
 	ARGBEGIN {
 	case 'd': /* don't update DNS in /etc/resolv.conf */
@@ -540,42 +552,45 @@ main(int argc, char *argv[])
 
 	if (argc)
 		ifname = argv[0]; /* interface name */
-	if (argc >= 2)
-		strlcpy((char *)cid, argv[1], sizeof(cid)); /* client-id */
+	if (argc >= 2) {  /* client-id */
+		if (strncmp(argv[1], "0x", 2) == 0)
+			cid_len = str2bytes(argv[1] + 2, cid, sizeof(cid));
+		else {
+			strlcpy((char *)cid, argv[1], sizeof(cid));
+			cid_len = strlen((char *)cid);
+		}
+	}
 
-	memset(&ifreq, 0, sizeof(ifreq));
 	signal(SIGTERM, cleanexit);
 
 	if (gethostname(hostname, sizeof(hostname)) == -1)
 		eprintf("gethostname:");
 
-	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		eprintf("socket:");
-	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &bcast, sizeof(bcast)) == -1)
-		eprintf("setsockopt:");
+	open_socket(ifname);
+	get_hw_addr(ifname, hwaddr);
 
+	/* Check if the interface is down... */
+	memset(&ifreq, 0, sizeof(ifreq));
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
-	ioctl(sock, SIOCGIFINDEX, &ifreq);
-	if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifreq, sizeof(ifreq)) == -1)
-		eprintf("setsockopt:");
-	iptoaddr(&addr, IP(255, 255, 255, 255), 68);
-	if (bind(sock, (void*)&addr, sizeof(addr)) != 0)
-		eprintf("bind:");
-	ioctl(sock, SIOCGIFHWADDR, &ifreq);
-	memcpy(hwaddr, ifreq.ifr_hwaddr.sa_data, sizeof(ifreq.ifr_hwaddr.sa_data));
-	if (!cid[0])
-		memcpy(cid, hwaddr, sizeof(cid));
+
+	const int want_flags = IFF_UP | IFF_RUNNING;
+	if (ioctl(sock, SIOCGIFFLAGS, &ifreq))
+		eprintf("get flags");
+	if ((ifreq.ifr_flags & want_flags) != want_flags)
+		eprintf("interface down");
+
+	if (cid_len == 0) {
+		cid[0] = 1;
+		memcpy(cid + 1, hwaddr, ETHER_ADDR_LEN);
+		cid_len = ETHER_ADDR_LEN + 1;
+	}
 
 	if ((rnd = open("/dev/urandom", O_RDONLY)) == -1)
 		eprintf("can't open /dev/urandom to generate unique transaction identifier:");
 	read(rnd, xid, sizeof(xid));
 	close(rnd);
 
-	for (i = 0; i < LEN(timers); ++i) {
-		timers[i] = timerfd_create(CLOCK_BOOTTIME, TFD_CLOEXEC);
-		if (timers[i] == -1)
-			eprintf("timerfd_create:");
-	}
+	create_timers(0);
 
 	starttime = time(NULL);
 	run();

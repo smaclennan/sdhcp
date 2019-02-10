@@ -5,6 +5,7 @@ include config.mk
 
 HDR = util.h arg.h
 LIB = \
+	util/compat.o \
 	util/strlcpy.o \
 	util/eprintf.o
 
@@ -28,6 +29,8 @@ binlib: util.a
 bin: $(BIN)
 
 $(OBJ): $(HDR) config.mk
+
+$(SRC:.c=.o): util.a
 
 .o:
 	@echo LD $@
