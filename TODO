@@ -1,0 +1,38 @@
+TODO:
+[ ] manual check memcpy bounds.
+[ ] add flag (-s?) to probe a specific DHCP server, not broadcast?
+    probably skip in run() Init: etc stages.
+[ ] replace unsigned char ip[4] and so on from function declarations.
+[?] ipv6 support ?
+
+Changed (for now):
+	- cleanup
+		- code style.
+		- trailing whitespace and use tabs.
+		- remove debug (dbgprintf()) code in sdhcp.c.
+		- code compiles more cleanly (ansi and c99),
+		  -D_BSD_SOURCE added and explicitly added missing headers (time.h and unistd.h).
+		- moved man page from sdhcp.8 to sdhcp.1
+		- changed man page to mandoc.
+	- typos:
+		- sdhcp.c: interface typo.
+		- sdhcp.1: shdcp typo.
+	- replace write() for stdout messages with fprintf()
+	- replace die() with eprintf().
+	- makefile:
+		- man page install should respect $DESTDIR.
+		- make sure on install /sbin and mandir exists.
+		- add config.mk, and follow suckless Makefile style.
+	- add arg.h
+		- first parameter remains interface.
+		- second parameter is optional client-id, used to be hardcoded to
+		  "vaio".
+		- add -d flag, don't update /etc/resolv.conf.
+		- add -i flag, don't set ip.
+		- add -f flag, run in foreground.
+		- add -e flag, run program, this has the following variables set:
+		  $SERVER, DHCP ip.
+		  $DNS, DNS ip.
+		  $ROUTER, router ip.
+		  $MASK, network mask.
+		  $CLIENT, client ip.
