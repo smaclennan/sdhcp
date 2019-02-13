@@ -111,8 +111,8 @@ unsigned char client[4];
 static unsigned char mask[4];
 static unsigned char router[4];
 static unsigned char dns[8];
-static unsigned char ntp[12];
-static char domainname[32];
+static unsigned char ntp[8];
+static char domainname[64];
 
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
@@ -367,15 +367,11 @@ callout(const char *state)
 		setenv("DOMAIN", domainname, 1);
 	if (ntp[0]) {
 		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[0], ntp[1], ntp[2], ntp[3]);
-		setenv("NTP1", buf, 1);
+		setenv("NTP", buf, 1);
 	}
 	if (ntp[4]) {
 		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[4], ntp[5], ntp[6], ntp[7]);
 		setenv("NTP2", buf, 1);
-	}
-	if (ntp[8]) {
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[8], ntp[9], ntp[10], ntp[11]);
-		setenv("NTP3", buf, 1);
 	}
 	system(program);
 }
