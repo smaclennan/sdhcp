@@ -142,6 +142,9 @@ iptoaddr(struct sockaddr *ifaddr, unsigned char ip[4], int port)
 static void
 setip(unsigned char ip[4], unsigned char mask[4], unsigned char gateway[4])
 {
+	if (iflag == 0)
+		return;
+
 #ifndef __linux__
 	/* TODO I believe this could work under other OSes. But since the
 	 * -e callout makes it so easy to work around this, I am just
@@ -194,6 +197,9 @@ setdns(unsigned char dns[])
 {
 	char buf[128];
 	int fd;
+
+	if (dflag == 0)
+		return;
 
 	if ((fd = creat("/etc/resolv.conf", 0644)) == -1) {
 		weprintf("can't change /etc/resolv.conf:");
@@ -335,47 +341,43 @@ dhcprecv(void)
 }
 
 static void
-acceptlease(void)
+callout(const char *state)
 {
-	char buf[128];
+	char buf[32];
 
-	if (iflag)
-		setip(client, mask, router);
-	if (dflag)
-		setdns(dns);
-	if (*program) {
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", server[0], server[1], server[2], server[3]);
-		setenv("SERVER", buf, 1);
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", client[0], client[1], client[2], client[3]);
-		setenv("CLIENT", buf, 1);
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3]);
-		setenv("MASK", buf, 1);
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", router[0], router[1], router[2], router[3]);
-		setenv("ROUTER", buf, 1);
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[0], dns[1], dns[2], dns[3]);
-		setenv("DNS", buf, 1);
-		if (dns[4]) {
-			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[4], dns[5], dns[6], dns[7]);
-			setenv("DNS2", buf, 1);
-		}
-		if (*domainname) {
-			strlcpy(buf, domainname, sizeof(buf));
-			setenv("DOMAIN", buf, 1);
-		}
-		if (ntp[0]) {
-			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[0], ntp[1], ntp[2], ntp[3]);
-			setenv("NTP1", buf, 1);
-		}
-		if (ntp[4]) {
-			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[4], ntp[5], ntp[6], ntp[7]);
-			setenv("NTP2", buf, 1);
-		}
-		if (ntp[8]) {
-			snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[8], ntp[9], ntp[10], ntp[11]);
-			setenv("NTP3", buf, 1);
-		}
-		system(program);
+	if (*program == 0)
+		return;
+
+	setenv("STATE", state, 1);
+	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", server[0], server[1], server[2], server[3]);
+	setenv("SERVER", buf, 1);
+	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", client[0], client[1], client[2], client[3]);
+	setenv("CLIENT", buf, 1);
+	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3]);
+	setenv("MASK", buf, 1);
+	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", router[0], router[1], router[2], router[3]);
+	setenv("ROUTER", buf, 1);
+	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[0], dns[1], dns[2], dns[3]);
+	setenv("DNS", buf, 1);
+	if (dns[4]) {
+		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[4], dns[5], dns[6], dns[7]);
+		setenv("DNS2", buf, 1);
 	}
+	if (*domainname)
+		setenv("DOMAIN", domainname, 1);
+	if (ntp[0]) {
+		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[0], ntp[1], ntp[2], ntp[3]);
+		setenv("NTP1", buf, 1);
+	}
+	if (ntp[4]) {
+		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[4], ntp[5], ntp[6], ntp[7]);
+		setenv("NTP2", buf, 1);
+	}
+	if (ntp[8]) {
+		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[8], ntp[9], ntp[10], ntp[11]);
+		setenv("NTP3", buf, 1);
+	}
+	system(program);
 }
 
 static void
@@ -461,7 +463,11 @@ Bound:
 	renewaltime = ntohl(renewaltime);
 	rebindingtime = ntohl(rebindingtime);
 	lease = ntohl(lease);
-	acceptlease();
+
+	setip(client, mask, router);
+	setdns(dns);
+	callout("BOUND");
+
 	if (!forked)
 		fputs("Congrats! You should be on the 'net.\n", stdout);
 	if (!fflag && !forked) {
@@ -470,6 +476,8 @@ Bound:
 		create_timers(1);
 	}
 	forked = 1; /* doesn't hurt to always set this */
+
+Renewed:
 	timeout.it_value.tv_sec = renewaltime;
 	settimeout(0, &timeout);
 	timeout.it_value.tv_sec = rebindingtime;
@@ -493,7 +501,8 @@ Renewing:
 	for (;;) {
 		switch (dhcprecv()) {
 		case DHCPack:
-			goto Bound;
+			callout("RENEW");
+			goto Renewed;
 		case Timeout0: /* resend request */
 			goto Renewing;
 		case Timeout1: /* t2 elapsed */
