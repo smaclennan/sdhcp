@@ -113,6 +113,7 @@ static unsigned char router[4];
 static unsigned char dns[8];
 static unsigned char ntp[8];
 static char domainname[64];
+static uint32_t renewaltime, rebindingtime, leasetime;
 
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
@@ -349,6 +350,8 @@ callout(const char *state)
 		return;
 
 	setenv("STATE", state, 1);
+	snprintf(buf, sizeof(buf), "%u", leasetime);
+	setenv("LEASE", buf, 1);
 	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", server[0], server[1], server[2], server[3]);
 	setenv("SERVER", buf, 1);
 	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", client[0], client[1], client[2], client[3]);
@@ -399,12 +402,26 @@ calctimeout(int n, struct itimerspec *ts)
 	}
 }
 
+static void parse_reply(void)
+{
+	optget(&bp, mask, OBmask, sizeof(mask));
+	optget(&bp, router, OBrouter, sizeof(router));
+	optget(&bp, dns, OBdnsserver, sizeof(dns));
+	optget(&bp, ntp, OBntp, sizeof(ntp));
+	optget(&bp, domainname, OBdomainname, sizeof(domainname - 1));
+	optget(&bp, &renewaltime, ODrenewaltime, sizeof(renewaltime));
+	optget(&bp, &rebindingtime, ODrebindingtime, sizeof(rebindingtime));
+	optget(&bp, &leasetime, ODlease, sizeof(leasetime));
+	renewaltime = ntohl(renewaltime);
+	rebindingtime = ntohl(rebindingtime);
+	leasetime = ntohl(leasetime);
+}
+
 static void
 run(void)
 {
 	int forked = 0, t;
 	struct itimerspec timeout = { { 0, 0 }, { 0, 0 } };
-	uint32_t renewaltime, rebindingtime, lease;
 
 Init:
 	memset(client, 0, sizeof(client));
@@ -448,18 +465,7 @@ Requesting:
 Bound:
 	close_socket(); /* currently raw sockets only */
 
-	optget(&bp, mask, OBmask, sizeof(mask));
-	optget(&bp, router, OBrouter, sizeof(router));
-	optget(&bp, dns, OBdnsserver, sizeof(dns));
-	optget(&bp, ntp, OBntp, sizeof(ntp));
-	optget(&bp, domainname, OBdomainname, sizeof(domainname - 1));
-	optget(&bp, &renewaltime, ODrenewaltime, sizeof(renewaltime));
-	optget(&bp, &rebindingtime, ODrebindingtime, sizeof(rebindingtime));
-	optget(&bp, &lease, ODlease, sizeof(lease));
-	renewaltime = ntohl(renewaltime);
-	rebindingtime = ntohl(rebindingtime);
-	lease = ntohl(lease);
-
+	parse_reply();
 	setip(client, mask, router);
 	setdns(dns);
 	callout("BOUND");
@@ -478,7 +484,7 @@ Renewed:
 	settimeout(0, &timeout);
 	timeout.it_value.tv_sec = rebindingtime;
 	settimeout(1, &timeout);
-	timeout.it_value.tv_sec = lease;;
+	timeout.it_value.tv_sec = leasetime;
 	settimeout(2, &timeout);
 	for (;;) {
 		switch (dhcprecv()) {
@@ -497,6 +503,7 @@ Renewing:
 	for (;;) {
 		switch (dhcprecv()) {
 		case DHCPack:
+			parse_reply();
 			callout("RENEW");
 			goto Renewed;
 		case Timeout0: /* resend request */
@@ -512,7 +519,7 @@ Rebinding:
 	calctimeout(2, &timeout);
 	settimeout(0, &timeout);
 	dhcpsend(DHCPrequest, Broadcast);
-	for (;;) {
+ 	for (;;) {
 		switch (dhcprecv()) {
 		case DHCPack:
 			goto Bound;
