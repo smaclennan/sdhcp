@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "../util.h"
 
@@ -158,7 +159,7 @@ static struct pkt {
 	struct ether_header ethhdr;
 	struct ip     iphdr;
 	struct udphdr udphdr;
-	unsigned char bootp[BOOTP_SIZE];
+	uint32_t bootp[BOOTP_SIZE / sizeof(uint32_t)];
 } __attribute__((packed)) pkt;
 
 /* pseudo header for udp calc */
@@ -283,8 +284,9 @@ udpsend(void *data, size_t n, int how)
 
 	size_t len = sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr) + n;
 	ssize_t sent;
-	if ((sent = sendto(sock, &pkt, len, 0, (struct sockaddr *)&sa, sizeof(sa))) == -1)
-		eprintf("sendto:");
+	while ((sent = sendto(sock, &pkt, len, 0, (struct sockaddr *)&sa, sizeof(sa))) == -1)
+		if (errno != EINTR)
+			eprintf("sendto:");
 
 	return sent;
 }
@@ -296,17 +298,25 @@ udprecv(void *data, size_t n)
 	int r;
 
 	memset(&recv, 0, sizeof(recv));
-	if ((r = read(sock, &recv, sizeof(recv))) == -1)
-		eprintf("read");
+	while ((r = read(sock, &recv, sizeof(recv))) == -1)
+		if (errno != EINTR)
+			eprintf("read");
 
 	r -= sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
+	if (r < 236)
+		return r; /* too small to be a dhcp packet */
+	if (r > (int)n) r = n;
 
-	// Make sure it is a dhcp packet
-	if (recv.udphdr.uh_sport == htons(67) && recv.udphdr.uh_dport == htons(68) && r > 0) {
-		memcpy(server_mac, &recv.ethhdr.ether_shost, ETHER_ADDR_LEN);
-		memcpy(data, &recv.bootp, r);
-	} else
-		memset(data, 0, n);
+	if (recv.udphdr.uh_sport != htons(67) || recv.udphdr.uh_dport != htons(68))
+		return r; /* not a dhcp packet */
+
+	if (memcmp(recv.bootp + 1, xid, 4))
+		return r; /* not our transaction id */
+	if (memcmp(recv.bootp + 7, hwaddr, ETHER_ADDR_LEN))
+		return r; /* not our mac */
+
+	memcpy(server_mac, &recv.ethhdr.ether_shost, ETHER_ADDR_LEN);
+	memcpy(data, &recv.bootp, r);
 
 	return r;
 }
@@ -366,8 +376,9 @@ udpsend(void *data, size_t n, int how)
 		memcpy(ip, server, 4);
 
 	iptoaddr(&addr, ip, 67); /* bootp server */
-	if ((sent = sendto(sock, data, n, flags, &addr, addrlen)) == -1)
-		eprintf("sendto:");
+	while ((sent = sendto(sock, data, n, flags, &addr, addrlen)) == -1)
+		if (errno != EINTR)
+			eprintf("sendto:");
 
 	return sent;
 }
@@ -378,8 +389,9 @@ udprecv(void *data, size_t n)
 {
 	ssize_t r;
 
-	if ((r = recv(sock, data, n, 0)) == -1)
-		eprintf("recvfrom:");
+	while ((r = recv(sock, data, n, 0)) == -1)
+		if (errno != EINTR)
+			eprintf("recvfrom:");
 
 	return r;
 }

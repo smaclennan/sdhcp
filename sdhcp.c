@@ -96,7 +96,7 @@ static const unsigned char params[] = {
 int sock = -1;
 
 /* conf */
-static unsigned char xid[sizeof(bp.xid)];
+unsigned char xid[sizeof(bp.xid)];
 unsigned char hwaddr[ETHER_ADDR_LEN];
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static time_t starttime;
