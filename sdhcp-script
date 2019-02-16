@@ -1,0 +1,17 @@
+#!/bin/sh
+
+LOG=/tmp/sdhcp.log
+
+date >> $LOG
+echo "State  $STATE"  >> $LOG
+echo "Lease  $LEASE"  >> $LOG
+echo "Server $SERVER" >> $LOG
+echo "Client $CLIENT" >> $LOG
+echo "Router $ROUTER" >> $LOG
+echo "Mask   $MASK"   >> $LOG
+echo "Domain $DOMAIN" >> $LOG
+echo "DNS    $DNS"    >> $LOG
+echo "DNS2   $DNS2"   >> $LOG
+echo "NTP    $NTP"    >> $LOG
+echo "NTP2   $NTP2"   >> $LOG
+echo >> $LOG
