@@ -133,6 +133,9 @@ iptoaddr(struct sockaddr *ifaddr, unsigned char ip[4], int port)
 {
 	struct sockaddr_in *in = (struct sockaddr_in *)ifaddr;
 
+#ifndef __linux__
+	in->sin_len = sizeof(struct sockaddr_in);
+#endif
 	in->sin_family = AF_INET;
 	in->sin_port = htons(port);
 	memcpy(&(in->sin_addr), ip, sizeof(in->sin_addr));
@@ -141,35 +144,37 @@ iptoaddr(struct sockaddr *ifaddr, unsigned char ip[4], int port)
 }
 
 static void
-setip(unsigned char ip[4], unsigned char mask[4], unsigned char gateway[4])
+setip(unsigned char ip[4], unsigned char mask[4])
 {
-	if (iflag == 0)
-		return;
+	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (fd == -1)
+		eprintf("can't set ip, socket:");
 
-#ifndef __linux__
-	/* TODO I believe this could work under other OSes. But since the
-	 * -e callout makes it so easy to work around this, I am just
-	 * going to leave it out for now.
-	 */
-	(void)ip; (void)mask; (void)gateway;
-#else
 	struct ifreq ifreq;
-	struct rtentry rtreq;
-	int fd;
-
 	memset(&ifreq, 0, sizeof(ifreq));
-	memset(&rtreq, 0, sizeof(rtreq));
 
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
-	iptoaddr(&(ifreq.ifr_addr), ip, 0);
-	if ((fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP)) == -1)
-		eprintf("can't set ip, socket:");
+	iptoaddr(&ifreq.ifr_addr, ip, 0);
 	ioctl(fd, SIOCSIFADDR, &ifreq);
-	iptoaddr(&(ifreq.ifr_netmask), mask, 0);
+	iptoaddr(&ifreq.ifr_addr, mask, 0);
 	ioctl(fd, SIOCSIFNETMASK, &ifreq);
 	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
 	ioctl(fd, SIOCSIFFLAGS, &ifreq);
+
+	close(fd);
+}
+
+static void
+setgw(unsigned char gateway[4])
+{
+#ifdef __linux__
+	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (fd == -1)
+		eprintf("can't set gw, socket:");
+
 	/* gw */
+	struct rtentry rtreq;
+	memset(&rtreq, 0, sizeof(rtreq));
 	rtreq.rt_flags = (RTF_UP | RTF_GATEWAY);
 	iptoaddr(&(rtreq.rt_gateway), gateway, 0);
 	iptoaddr(&(rtreq.rt_genmask), IP(0, 0, 0, 0), 0);
@@ -177,6 +182,8 @@ setip(unsigned char ip[4], unsigned char mask[4], unsigned char gateway[4])
 	ioctl(fd, SIOCADDRT, &rtreq);
 
 	close(fd);
+#else
+	(void)gateway;
 #endif
 }
 
@@ -466,7 +473,10 @@ Bound:
 	close_socket(); /* currently raw sockets only */
 
 	parse_reply();
-	setip(client, mask, router);
+	if (iflag) {
+		setip(client, mask);
+		setgw(router);
+	}
 	setdns(dns);
 	callout("BOUND");
 
@@ -576,7 +586,6 @@ static int str2bytes(const char *str, uint8_t *bytes, int len)
 int
 main(int argc, char *argv[])
 {
-	struct ifreq ifreq;
 	int rnd;
 
 	ARGBEGIN {
@@ -616,15 +625,10 @@ main(int argc, char *argv[])
 	open_socket(ifname);
 	get_hw_addr(ifname, hwaddr);
 
-	/* Check if the interface is down... */
-	memset(&ifreq, 0, sizeof(ifreq));
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
-
-	const int want_flags = IFF_UP | IFF_RUNNING;
-	if (ioctl(sock, SIOCGIFFLAGS, &ifreq))
-		eprintf("get flags");
-	if ((ifreq.ifr_flags & want_flags) != want_flags)
-		eprintf("interface down");
+	/* Set interface up.
+	 * For BSD we seem to need to set ip to 0.0.0.0.
+	 */
+	setip(IP(0,0,0,0), IP(255,0,0,0));
 
 	if (cid_len == 0) {
 		cid[0] = 1;
