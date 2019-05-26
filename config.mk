@@ -5,7 +5,7 @@ PREFIX    = /usr/local
 DESTDIR   =
 MANPREFIX = $(PREFIX)/share/man
 
-CC        = cc
+CC        = gcc
 LD        = $(CC)
 CPPFLAGS  = -D_DEFAULT_SOURCE
 CFLAGS    = -Wall -Wextra -pedantic -std=c99 $(CPPFLAGS)
@@ -14,6 +14,8 @@ LDFLAGS   = -s
 SYS = $(shell uname -s)
 
 ifeq ($(SYS), QNX)
+# QNX will not compile with -std=c99
+CFLAGS    = -Wall -Wextra -pedantic $(CPPFLAGS)
 LDFLAGS += -lsocket
 endif
 
