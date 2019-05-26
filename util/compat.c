@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <err.h>
 #include <net/route.h>
 
 #include "../util.h"
@@ -21,7 +22,7 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr)
 	memset(&ifreq, 0, sizeof(ifreq));
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
 	if (ioctl(sock, SIOCGIFHWADDR, &ifreq))
-		eprintf("SIOCGIFHWADDR");
+		err(1, "SIOCGIFHWADDR");
 
 	memcpy(hwaddr, ifreq.ifr_hwaddr.sa_data, sizeof(ifreq.ifr_hwaddr.sa_data));
 }
@@ -33,7 +34,7 @@ create_timers(int recreate)
 		for (int i = 0; i < N_TIMERS; ++i) {
 			timers[i] = timerfd_create(CLOCK_BOOTTIME, TFD_CLOEXEC);
 			if (timers[i] == -1)
-				eprintf("timerfd_create:");
+				err(1, "timerfd_create:");
 		}
 }
 
@@ -49,7 +50,7 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr)
 	struct sockaddr_dl *sa = NULL;
 
 	if (getifaddrs(&ifa))
-		eprintf("getifaddrs");
+		err(1, "getifaddrs");
 
 	for (struct ifaddrs *p = ifa; p; p = p->ifa_next) {
 		if (p->ifa_addr->sa_family == AF_LINK &&
@@ -60,11 +61,11 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr)
 				freeifaddrs(ifa);
 				return;
 			} else
-				eprintf("INVALID %d", sa->sdl_type);
+				errx(1, "INVALID %d", sa->sdl_type);
 		}
 	}
 
-	eprintf("No interface called '%s'", ifname);
+	errx(1, "No interface called '%s'", ifname);
 }
 
 #include <signal.h>
@@ -100,7 +101,7 @@ create_timers(int recreate)
 		ev.sigev_value.sival_int = id;
 
 		if (timer_create(CLOCK_MONOTONIC, &ev, &t_id[id]))
-			eprintf("timer_create");
+			err(1, "timer_create");
 	}
 
 	if (recreate)
@@ -108,12 +109,12 @@ create_timers(int recreate)
 		return;
 
 	if (sigaction(SIGALRM, &act, NULL) < 0)
-		eprintf("sigaction SIGALRM:");
+		err(1, "sigaction SIGALRM:");
 
 	for (int id = 0; id < N_TIMERS; ++id) {
 		int pipes[2];
 		if (pipe(pipes))
-			eprintf("pipe");
+			err(1, "pipe");
 
 		timers[id] = pipes[0];		/* read end */
 		t_wr_pipe[id] = pipes[1];	/* write end */
@@ -207,17 +208,17 @@ open_socket(const char *ifname)
 	int bcast = 1;
 
 	if ((sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) == -1)
-		eprintf("socket:");
+		err(1, "socket:");
 
 	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &bcast, sizeof(bcast)) == -1)
-		eprintf("setsockopt broadcast:");
+		err(1, "setsockopt broadcast:");
 
 	struct ifreq ifreq;
 	memset(&ifreq, 0, sizeof(ifreq));
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
 
 	if (ioctl(sock, SIOCGIFINDEX, &ifreq))
-		eprintf("SIOCGIFINDEX");
+		err(1, "SIOCGIFINDEX");
 	ifindex = ifreq.ifr_ifindex;
 }
 
@@ -287,7 +288,7 @@ udpsend(void *data, size_t n, int how)
 	ssize_t sent;
 	while ((sent = sendto(sock, &pkt, len, 0, (struct sockaddr *)&sa, sizeof(sa))) == -1)
 		if (errno != EINTR)
-			eprintf("sendto:");
+			err(1, "sendto:");
 
 	return sent;
 }
@@ -301,7 +302,7 @@ udprecv(void *data, size_t n)
 	memset(&recv, 0, sizeof(recv));
 	while ((r = read(sock, &recv, sizeof(recv))) == -1)
 		if (errno != EINTR)
-			eprintf("read");
+			err(1, "read");
 
 	r -= sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
 	if (r < 236)
@@ -332,10 +333,10 @@ open_socket(const char *ifname)
 	int set = 1;
 
 	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
-		eprintf("socket:");
+		err(1, "socket:");
 
 	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &set, sizeof(set)) == -1)
-		eprintf("SO_BROADCAST:");
+		err(1, "SO_BROADCAST:");
 
 	memset(&ifreq, 0, sizeof(ifreq));
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
@@ -343,19 +344,19 @@ open_socket(const char *ifname)
 #ifdef SIOCGIFINDEX
 	// SAM I am pretty sure this is not needed
 	if (ioctl(sock, SIOCGIFINDEX, &ifreq))
-		eprintf("SIOCGIFINDEX:");
+		err(1, "SIOCGIFINDEX:");
 #endif
 
 #ifdef SO_BINDTODEVICE
 	if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifreq, sizeof(ifreq)) == -1)
-		eprintf("SO_BINDTODEVICE:");
+		err(1, "SO_BINDTODEVICE:");
 #endif
 
 	/* needed */
 	struct sockaddr addr;
 	iptoaddr(&addr, IP(0, 0, 0, 0), 68);
 	if (bind(sock, (void*)&addr, sizeof(addr)) != 0)
-		eprintf("bind:");
+		err(1, "bind:");
 }
 
 void close_socket(void) {}
@@ -379,7 +380,7 @@ udpsend(void *data, size_t n, int how)
 	iptoaddr(&addr, ip, 67); /* bootp server */
 	while ((sent = sendto(sock, data, n, flags, &addr, addrlen)) == -1)
 		if (errno != EINTR)
-			eprintf("sendto:");
+			err(1, "sendto:");
 
 	return sent;
 }
@@ -392,7 +393,7 @@ udprecv(void *data, size_t n)
 
 	while ((r = recv(sock, data, n, 0)) == -1)
 		if (errno != EINTR)
-			eprintf("recvfrom:");
+			err(1, "recvfrom:");
 
 	return r;
 }
@@ -405,7 +406,7 @@ setgw(unsigned char gateway[4])
 {
 	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 	if (fd == -1)
-		eprintf("can't set gw, socket:");
+		err(1, "can't set gw, socket:");
 
 	struct rtentry rtreq;
 	memset(&rtreq, 0, sizeof(rtreq));
@@ -463,7 +464,7 @@ setgw(unsigned char gateway[4])
 {
 	int s = socket(PF_ROUTE, SOCK_RAW, 0);
 	if (s < 0)
-		eprintf("can't set gw, socket:");
+		err(1, "can't set gw, socket:");
 
 	shutdown(s, SHUT_RD); /* Don't want to read back our messages */
 
@@ -479,6 +480,6 @@ setgw(unsigned char gateway[4])
 		}
 
 	close(s);
-	eprintf("rtmsg send:");
+	err(1, "rtmsg send:");
 }
 #endif

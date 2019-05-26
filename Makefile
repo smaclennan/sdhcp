@@ -7,7 +7,6 @@ HDR = util.h arg.h
 LIB = \
 	util/compat.o \
 	util/strlcpy.o \
-	util/eprintf.o
 
 SRC = sdhcp.c
 

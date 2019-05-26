@@ -1,3 +1,5 @@
+#ifdef __linux__
+
 /* Taken from OpenBSD */
 #include <sys/types.h>
 #include <string.h>
@@ -30,3 +32,4 @@ strlcpy(char *dst, const char *src, size_t siz)
         }
         return(s - src - 1);    /* count does not include NUL */
 }
+#endif

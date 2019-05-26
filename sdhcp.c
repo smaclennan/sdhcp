@@ -16,6 +16,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <err.h>
 
 #include "arg.h"
 #include "util.h"
@@ -94,6 +95,8 @@ static const unsigned char params[] = {
 /* One socket to rule them all */
 int sock = -1;
 
+char *argv0;
+
 /* conf */
 unsigned char xid[sizeof(bp.xid)];
 unsigned char hwaddr[ETHER_ADDR_LEN];
@@ -147,7 +150,7 @@ setip(unsigned char ip[4], unsigned char mask[4])
 {
 	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 	if (fd == -1)
-		eprintf("can't set ip, socket:");
+		err(1, "can't set ip, socket:");
 
 	struct ifreq ifreq;
 	memset(&ifreq, 0, sizeof(ifreq));
@@ -186,7 +189,7 @@ setdns(unsigned char dns[])
 		return;
 
 	if ((fd = creat("/etc/resolv.conf", 0644)) == -1) {
-		weprintf("can't change /etc/resolv.conf:");
+		warn("can't change /etc/resolv.conf:");
 		return;
 	}
 	cat(fd, "/etc/resolv.conf.head");
@@ -302,7 +305,7 @@ dhcprecv(void)
 
 	while (poll(pfd, LEN(pfd), -1) == -1)
 		if (errno != EINTR)
-			eprintf("poll:");
+			err(1, "poll:");
 	if (pfd[0].revents) {
 		memset(&bp, 0, sizeof(bp));
 		udprecv(&bp, sizeof(bp));
@@ -366,7 +369,7 @@ static void
 settimeout(int n, const struct itimerspec *ts)
 {
 	if (timerfd_settime(timers[n], 0, ts, NULL) < 0)
-		eprintf("timerfd_settime:");
+		err(1, "timerfd_settime:");
 }
 
 /* sets ts to expire halfway to the expiration of timer n, minimum of 60 seconds */
@@ -374,7 +377,7 @@ static void
 calctimeout(int n, struct itimerspec *ts)
 {
 	if (timerfd_gettime(timers[n], ts) < 0)
-		eprintf("timerfd_gettime:");
+		err(1, "timerfd_gettime:");
 	ts->it_value.tv_nsec /= 2;
 	if (ts->it_value.tv_sec % 2)
 		ts->it_value.tv_nsec += 500000000;
@@ -529,7 +532,7 @@ cleanexit(int unused)
 static void
 usage(void)
 {
-	eprintf("usage: %s [-d] [-e program] [-f] [-i] [ifname] [clientid]\n", argv0);
+	err(1, "usage: %s [-d] [-e program] [-f] [-i] [ifname] [clientid]\n", argv0);
 }
 
 static uint8_t fromhex(char nibble)
@@ -541,7 +544,7 @@ static uint8_t fromhex(char nibble)
 	else if (nibble >= 'A' && nibble <= 'F')
 		return nibble - 'A' + 10;
 	else
-		eprintf("Bad nibble %c\n", nibble);
+		errx(1, "Bad nibble %c\n", nibble);
 	return 0; // unreachable
 }
 
@@ -596,7 +599,7 @@ main(int argc, char *argv[])
 	signal(SIGTERM, cleanexit);
 
 	if (gethostname(hostname, sizeof(hostname)) == -1)
-		eprintf("gethostname:");
+		err(1, "gethostname:");
 
 	open_socket(ifname);
 	get_hw_addr(ifname, hwaddr);
@@ -613,7 +616,7 @@ main(int argc, char *argv[])
 	}
 
 	if ((rnd = open("/dev/urandom", O_RDONLY)) == -1)
-		eprintf("can't open /dev/urandom to generate unique transaction identifier:");
+		err(1, "can't open /dev/urandom to generate unique transaction identifier:");
 	read(rnd, xid, sizeof(xid));
 	close(rnd);
 
