@@ -7,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <net/route.h>
 
 #include "../util.h"
 
@@ -417,8 +418,6 @@ setgw(unsigned char gateway[4])
 	close(fd);
 }
 #else
-#include <net/route.h>
-
 #define RTM_ADDRS ((1 << RTAX_DST) | (1 << RTAX_GATEWAY) | (1 << RTAX_NETMASK))
 #define RTM_SEQ 42
 #define RTM_FLAGS (RTF_STATIC | RTF_UP | RTF_GATEWAY)
