@@ -33,6 +33,7 @@ ssize_t udpsend(void *data, size_t n, int how);
 ssize_t udprecv(void *data, size_t n);
 void get_hw_addr(const char *ifname, unsigned char *hwaddr);
 void create_timers(int recreate);
+void setgw(unsigned char gateway[4]);
 
 struct sockaddr *iptoaddr(struct sockaddr *ifaddr,
 						  unsigned char ip[4], int port);

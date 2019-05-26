@@ -11,5 +11,14 @@ CPPFLAGS  = -D_DEFAULT_SOURCE
 CFLAGS    = -Wall -Wextra -pedantic -std=c99 $(CPPFLAGS)
 LDFLAGS   = -s
 
+SYS = $(shell uname -s)
+
+ifeq ($(SYS), Linux)
 # This is Linux specific
 CFLAGS += -DUSE_RAW_SOCKET
+endif
+
+ifeq ($(findstring BSD, $(SYS)), BSD)
+# Needed on BSD for timer_*
+LDFLAGS += -lrt
+endif

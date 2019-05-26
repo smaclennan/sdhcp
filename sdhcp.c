@@ -165,29 +165,6 @@ setip(unsigned char ip[4], unsigned char mask[4])
 }
 
 static void
-setgw(unsigned char gateway[4])
-{
-#ifdef __linux__
-	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
-	if (fd == -1)
-		eprintf("can't set gw, socket:");
-
-	/* gw */
-	struct rtentry rtreq;
-	memset(&rtreq, 0, sizeof(rtreq));
-	rtreq.rt_flags = (RTF_UP | RTF_GATEWAY);
-	iptoaddr(&(rtreq.rt_gateway), gateway, 0);
-	iptoaddr(&(rtreq.rt_genmask), IP(0, 0, 0, 0), 0);
-	iptoaddr(&(rtreq.rt_dst), IP(0, 0, 0, 0), 0);
-	ioctl(fd, SIOCADDRT, &rtreq);
-
-	close(fd);
-#else
-	(void)gateway;
-#endif
-}
-
-static void
 cat(int dfd, char *src)
 {
 	char buf[BUFSIZ];
@@ -415,7 +392,7 @@ static void parse_reply(void)
 	optget(&bp, router, OBrouter, sizeof(router));
 	optget(&bp, dns, OBdnsserver, sizeof(dns));
 	optget(&bp, ntp, OBntp, sizeof(ntp));
-	optget(&bp, domainname, OBdomainname, sizeof(domainname - 1));
+	optget(&bp, domainname, OBdomainname, sizeof(domainname));
 	optget(&bp, &renewaltime, ODrenewaltime, sizeof(renewaltime));
 	optget(&bp, &rebindingtime, ODrebindingtime, sizeof(rebindingtime));
 	optget(&bp, &leasetime, ODlease, sizeof(leasetime));

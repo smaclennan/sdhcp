@@ -397,3 +397,88 @@ udprecv(void *data, size_t n)
 }
 
 #endif
+
+#ifdef __linux__
+void
+setgw(unsigned char gateway[4])
+{
+	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (fd == -1)
+		eprintf("can't set gw, socket:");
+
+	struct rtentry rtreq;
+	memset(&rtreq, 0, sizeof(rtreq));
+	rtreq.rt_flags = (RTF_UP | RTF_GATEWAY);
+	iptoaddr(&(rtreq.rt_gateway), gateway, 0);
+	iptoaddr(&(rtreq.rt_genmask), IP(0, 0, 0, 0), 0);
+	iptoaddr(&(rtreq.rt_dst), IP(0, 0, 0, 0), 0);
+	ioctl(fd, SIOCADDRT, &rtreq);
+
+	close(fd);
+}
+#else
+#include <net/route.h>
+
+#define RTM_ADDRS ((1 << RTAX_DST) | (1 << RTAX_GATEWAY) | (1 << RTAX_NETMASK))
+#define RTM_SEQ 42
+#define RTM_FLAGS (RTF_STATIC | RTF_UP | RTF_GATEWAY)
+
+static int
+rtmsg_send(int s, int cmd, unsigned char gateway[4])
+{
+	struct rtmsg {
+		struct rt_msghdr hdr;
+		unsigned char data[512];
+	} rtmsg;
+
+	memset(&rtmsg, 0, sizeof(rtmsg));
+	rtmsg.hdr.rtm_type = cmd;
+	rtmsg.hdr.rtm_flags = RTM_FLAGS;
+	rtmsg.hdr.rtm_version = RTM_VERSION;
+	rtmsg.hdr.rtm_seq = RTM_SEQ;
+	rtmsg.hdr.rtm_addrs = RTM_ADDRS;
+
+	struct sockaddr_in sa;
+	memset(&sa, 0, sizeof(sa));
+	sa.sin_len = sizeof(sa);
+	sa.sin_family = AF_INET;
+
+	unsigned char *cp = rtmsg.data;
+
+	iptoaddr((struct sockaddr *)cp, IP(0,0,0,0), 0); // DST
+	cp += sizeof(struct sockaddr_in);
+	iptoaddr((struct sockaddr *)cp, gateway, 0); // GATEWAY
+	cp += sizeof(struct sockaddr_in);
+	iptoaddr((struct sockaddr *)cp, IP(0,0,0,0), 0); // NETMASK
+	cp += sizeof(struct sockaddr_in);
+
+	rtmsg.hdr.rtm_msglen = cp - (unsigned char *)&rtmsg;
+	if (write(s, &rtmsg, rtmsg.hdr.rtm_msglen) < 0)
+		return -1;
+
+	return 0;
+}
+
+void
+setgw(unsigned char gateway[4])
+{
+	int s = socket(PF_ROUTE, SOCK_RAW, 0);
+	if (s < 0)
+		eprintf("can't set gw, socket:");
+
+	shutdown(s, SHUT_RD); /* Don't want to read back our messages */
+
+	if (rtmsg_send(s, RTM_ADD, gateway) == 0) {
+		close(s);
+		return;
+	}
+
+	if (errno == EEXIST)
+		if (rtmsg_send(s, RTM_CHANGE, gateway) == 0) {
+			close(s);
+		}
+
+	eprintf("rtmsg send:");
+	close(s);
+}
+#endif
