@@ -146,7 +146,7 @@ timerfd_settime(int fd, int flags,
 
 #endif
 
-#ifdef USE_RAW_SOCKET
+#ifdef __linux__
 
 #include <netinet/if_ether.h>
 #include <netinet/ip.h>

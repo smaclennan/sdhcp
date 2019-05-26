@@ -13,9 +13,8 @@ LDFLAGS   = -s
 
 SYS = $(shell uname -s)
 
-ifeq ($(SYS), Linux)
-# This is Linux specific
-CFLAGS += -DUSE_RAW_SOCKET
+ifeq ($(SYS), QNX)
+LDFLAGS += -lsocket
 endif
 
 ifeq ($(findstring BSD, $(SYS)), BSD)
