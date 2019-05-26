@@ -431,11 +431,11 @@ rtmsg_send(int s, int cmd, unsigned char gateway[4])
 	} rtmsg;
 
 	memset(&rtmsg, 0, sizeof(rtmsg));
-	rtmsg.hdr.rtm_type = cmd;
-	rtmsg.hdr.rtm_flags = RTM_FLAGS;
+	rtmsg.hdr.rtm_type    = cmd;
+	rtmsg.hdr.rtm_flags   = RTM_FLAGS;
 	rtmsg.hdr.rtm_version = RTM_VERSION;
-	rtmsg.hdr.rtm_seq = RTM_SEQ;
-	rtmsg.hdr.rtm_addrs = RTM_ADDRS;
+	rtmsg.hdr.rtm_seq     = RTM_SEQ;
+	rtmsg.hdr.rtm_addrs   = RTM_ADDRS;
 
 	struct sockaddr_in sa;
 	memset(&sa, 0, sizeof(sa));
@@ -446,7 +446,7 @@ rtmsg_send(int s, int cmd, unsigned char gateway[4])
 
 	iptoaddr((struct sockaddr *)cp, IP(0,0,0,0), 0); // DST
 	cp += sizeof(struct sockaddr_in);
-	iptoaddr((struct sockaddr *)cp, gateway, 0); // GATEWAY
+	iptoaddr((struct sockaddr *)cp, gateway, 0);     // GATEWAY
 	cp += sizeof(struct sockaddr_in);
 	iptoaddr((struct sockaddr *)cp, IP(0,0,0,0), 0); // NETMASK
 	cp += sizeof(struct sockaddr_in);
@@ -475,9 +475,10 @@ setgw(unsigned char gateway[4])
 	if (errno == EEXIST)
 		if (rtmsg_send(s, RTM_CHANGE, gateway) == 0) {
 			close(s);
+			return;
 		}
 
-	eprintf("rtmsg send:");
 	close(s);
+	eprintf("rtmsg send:");
 }
 #endif
