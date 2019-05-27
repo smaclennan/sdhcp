@@ -303,12 +303,15 @@ dhcprecv(void)
 	};
 	uint64_t n;
 
+again:
 	while (poll(pfd, LEN(pfd), -1) == -1)
 		if (errno != EINTR)
 			err(1, "poll:");
 	if (pfd[0].revents) {
 		memset(&bp, 0, sizeof(bp));
-		udprecv(&bp, sizeof(bp));
+		if (udprecv(&bp, sizeof(bp)) == -1)
+			/* Not our packet */
+			goto again;
 		optget(&bp, &type, ODtype, sizeof(type));
 		return type;
 	}

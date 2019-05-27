@@ -306,16 +306,16 @@ udprecv(void *data, size_t n)
 
 	r -= sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
 	if (r < 236)
-		return r; /* too small to be a dhcp packet */
+		return -1; /* too small to be a dhcp packet */
 	if (r > (int)n) r = n;
 
 	if (recv.udphdr.uh_sport != htons(67) || recv.udphdr.uh_dport != htons(68))
-		return r; /* not a dhcp packet */
+		return -1; /* not a dhcp packet */
 
 	if (memcmp(recv.bootp + 1, xid, 4))
-		return r; /* not our transaction id */
+		return -1; /* not our transaction id */
 	if (memcmp(recv.bootp + 7, hwaddr, ETHER_ADDR_LEN))
-		return r; /* not our mac */
+		return -1; /* not our mac */
 
 	memcpy(server_mac, &recv.ethhdr.ether_shost, ETHER_ADDR_LEN);
 	memcpy(data, &recv.bootp, r);
@@ -394,6 +394,11 @@ udprecv(void *data, size_t n)
 	while ((r = recv(sock, data, n, 0)) == -1)
 		if (errno != EINTR)
 			err(1, "recvfrom:");
+
+	if (memcmp(data + 4, xid, 4))
+		return -1; /* not our transaction id */
+	if (memcmp(data + 28, hwaddr, ETHER_ADDR_LEN))
+		return -1; /* not our mac */
 
 	return r;
 }
