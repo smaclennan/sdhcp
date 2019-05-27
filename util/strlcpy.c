@@ -1,7 +1,7 @@
-#ifdef __linux__
-
-#include <string.h>
 #include "../util.h"
+
+#ifdef __linux__
+#include <string.h>
 
 /*
  * Copy src to string dst of size siz.  At most siz-1 characters
