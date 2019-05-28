@@ -5,7 +5,7 @@ PREFIX    = /usr/local
 DESTDIR   =
 MANPREFIX = $(PREFIX)/share/man
 
-CC        = gcc
+CC        = cc
 LD        = $(CC)
 CPPFLAGS  = -D_DEFAULT_SOURCE
 CFLAGS    = -Wall -Wextra -pedantic -std=c99 $(CPPFLAGS)

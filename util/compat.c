@@ -2,13 +2,14 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <net/if.h>
+#include <net/route.h>
 #include <netinet/in.h>
+#include <netinet/if_ether.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
 #include <err.h>
-#include <net/route.h>
 
 #include "../util.h"
 
@@ -395,9 +396,10 @@ udprecv(void *data, size_t n)
 		if (errno != EINTR)
 			err(1, "recvfrom:");
 
-	if (memcmp(data + 4, xid, 4))
+	unsigned *bp = data;
+	if (memcmp(bp + 1, xid, 4))
 		return -1; /* not our transaction id */
-	if (memcmp(data + 28, hwaddr, ETHER_ADDR_LEN))
+	if (memcmp(bp + 7, hwaddr, ETHER_ADDR_LEN))
 		return -1; /* not our mac */
 
 	return r;
