@@ -1,4 +1,4 @@
-#include "../util.h"
+#include "util.h"
 
 #ifdef __linux__
 #include <string.h>

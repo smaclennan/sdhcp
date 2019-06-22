@@ -4,17 +4,14 @@ include config.mk
 .SUFFIXES: .c .o
 
 HDR = util.h arg.h
-LIB = \
-	util/compat.o \
-	util/strlcpy.o \
 
-SRC = sdhcp.c
+SRC = sdhcp.c compat.c strlcpy.c
 
-OBJ = $(SRC:.c=.o) $(LIB)
-BIN = $(SRC:.c=)
-MAN = $(SRC:.c=.1)
+OBJ = $(SRC:.c=.o)
+BIN = sdhcp
+MAN = $(BIN).1
 
-all: options binlib
+all: options $(BIN)
 
 options:
 	@echo sdhcp build options:
@@ -22,27 +19,14 @@ options:
 	@echo "LDFLAGS  = ${LDFLAGS}"
 	@echo "CC       = ${CC}"
 
-binlib: util.a
-	$(MAKE) bin
-
-bin: $(BIN)
+$(BIN): $(OBJ)
+	@$(LD) -o $@ $(OBJ) $(LDFLAGS)
 
 $(OBJ): $(HDR) config.mk
-
-$(SRC:.c=.o): util.a
-
-.o:
-	@echo LD $@
-	@$(LD) -o $@ $< util.a $(LDFLAGS)
 
 .c.o:
 	@echo CC $<
 	@$(CC) -c -o $@ $< $(CFLAGS)
-
-util.a: $(LIB)
-	@echo AR $@
-	@$(AR) -r -c $@ $(LIB)
-	@ranlib $@
 
 install: all
 	@echo installing executables to $(DESTDIR)$(PREFIX)/sbin
