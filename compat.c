@@ -25,7 +25,7 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr)
 	if (ioctl(sock, SIOCGIFHWADDR, &ifreq))
 		err(1, "SIOCGIFHWADDR");
 
-	memcpy(hwaddr, ifreq.ifr_hwaddr.sa_data, sizeof(ifreq.ifr_hwaddr.sa_data));
+	memcpy(hwaddr, ifreq.ifr_hwaddr.sa_data, ETHER_ADDR_LEN);
 }
 
 void
@@ -58,7 +58,7 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr)
 			strcmp(p->ifa_name, ifname) == 0) {
 			sa = (struct sockaddr_dl *)p->ifa_addr;
 			if (sa->sdl_type == 1 || sa->sdl_type == 6) { // ethernet
-				memcpy(hwaddr, LLADDR(sa), sa->sdl_alen);
+				memcpy(hwaddr, LLADDR(sa), ETHER_ADDR_LEN);
 				freeifaddrs(ifa);
 				return;
 			} else
