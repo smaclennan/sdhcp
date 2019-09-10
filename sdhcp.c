@@ -95,7 +95,7 @@ static const unsigned char params[] = {
 /* One socket to rule them all */
 int sock = -1;
 
-char *argv0;
+static char *argv0;
 
 /* conf */
 unsigned char xid[sizeof(bp.xid)];
