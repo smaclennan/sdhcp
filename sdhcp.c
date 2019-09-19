@@ -19,7 +19,7 @@
 #include <err.h>
 
 #include "arg.h"
-#include "util.h"
+#include "compat.h"
 
 typedef struct bootp {
 	unsigned char op      [1];

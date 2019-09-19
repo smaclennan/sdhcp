@@ -11,7 +11,7 @@
 #include <errno.h>
 #include <err.h>
 
-#include "util.h"
+#include "compat.h"
 
 #ifdef __linux__
 

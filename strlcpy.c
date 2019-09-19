@@ -1,4 +1,4 @@
-#include "util.h"
+#include "compat.h"
 
 #ifdef __linux__
 #include <string.h>
