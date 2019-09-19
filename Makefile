@@ -5,7 +5,7 @@ include config.mk
 
 HDR = compat.h arg.h
 
-SRC = sdhcp.c compat.c strlcpy.c
+SRC = sdhcp.c compat.c
 
 OBJ = $(SRC:.c=.o)
 BIN = sdhcp
