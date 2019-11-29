@@ -18,7 +18,6 @@
 #include <unistd.h>
 #include <err.h>
 
-#include "arg.h"
 #include "compat.h"
 
 typedef struct bootp {
@@ -573,33 +572,34 @@ static int str2bytes(const char *str, uint8_t *bytes, int len)
 int
 main(int argc, char *argv[])
 {
-	int rnd;
+	int rnd, c;
 
-	ARGBEGIN {
-	case 'd': /* don't update DNS in /etc/resolv.conf */
-		dflag = 0;
-		break;
-	case 'e': /* run program */
-		program = EARGF(usage());
-		break;
-	case 'f': /* run in foreground */
-		fflag = 1;
-		break;
-	case 'i': /* don't set ip */
-		iflag = 0;
-		break;
-	default:
-		usage();
-		break;
-	} ARGEND;
+	while ((c = getopt(argc, argv, "de:fi")) != EOF)
+		switch (c) {
+		case 'd': /* don't update DNS in /etc/resolv.conf */
+			dflag = 0;
+			break;
+		case 'e': /* run program */
+			program = optarg;
+			break;
+		case 'f': /* run in foreground */
+			fflag = 1;
+			break;
+		case 'i': /* don't set ip */
+			iflag = 0;
+			break;
+		default:
+			usage();
+			break;
+		}
 
-	if (argc)
-		ifname = argv[0]; /* interface name */
-	if (argc >= 2) {  /* client-id */
-		if (strncmp(argv[1], "0x", 2) == 0)
-			cid_len = str2bytes(argv[1] + 2, cid, sizeof(cid));
+	if (optind < argc)
+		ifname = argv[optind++]; /* interface name */
+	if (optind < argc) {  /* client-id */
+		if (strncmp(argv[optind], "0x", 2) == 0)
+			cid_len = str2bytes(argv[optind] + 2, cid, sizeof(cid));
 		else {
-			strlcpy((char *)cid, argv[1], sizeof(cid));
+			strlcpy((char *)cid, argv[optind], sizeof(cid));
 			cid_len = strlen((char *)cid);
 		}
 	}

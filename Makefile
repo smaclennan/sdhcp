@@ -3,7 +3,7 @@ include config.mk
 .POSIX:
 .SUFFIXES: .c .o
 
-HDR = compat.h arg.h
+HDR = compat.h
 
 SRC = sdhcp.c compat.c
 
