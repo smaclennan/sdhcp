@@ -339,6 +339,9 @@ callout(const char *state)
 		return;
 
 	setenv("STATE", state, 1);
+	setenv("IFNAME", ifname, 1);
+	snprintf(buf, sizeof(buf), "%d", getpid());
+	setenv("SPID", buf, 1);
 	snprintf(buf, sizeof(buf), "%u", leasetime);
 	setenv("LEASE", buf, 1);
 	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", server[0], server[1], server[2], server[3]);
@@ -460,7 +463,6 @@ Bound:
 		setgw(router);
 	}
 	setdns(dns);
-	callout("BOUND");
 
 	if (!forked)
 		fputs("Congrats! You should be on the 'net.\n", stdout);
@@ -470,6 +472,9 @@ Bound:
 		create_timers(1);
 	}
 	forked = 1; /* doesn't hurt to always set this */
+
+	/* call after bound to get pid */
+	callout("BOUND");
 
 Renewed:
 	timeout.it_value.tv_sec = renewaltime;
