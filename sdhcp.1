@@ -10,6 +10,7 @@
 .Op Fl e Ar program
 .Op Fl f
 .Op Fl i
+.Op Fl r Ar resolv.conf file
 .Op Ar interface
 .Op Ar client-id
 .Sh DESCRIPTION
@@ -30,20 +31,42 @@ Variables will be set, see VARIABLES.
 run in foreground.
 .It Fl i
 don't change interface information such as an IP address.
+.It Fl r Ar resolv.conf file
+alternate /etc/resolv.conf location
 .El
 .Sh VARIABLES
 The following variables are set:
 .Bl -tag -width Ds
-.It Ev SERVER
-DHCP IP.
-.It Ev DNS
-DNS IP.
-.It Ev ROUTER
-router IP.
-.It Ev MASK
-network mask.
 .It Ev CLIENT
 your client IP.
+.It Ev IFNAME
+interface name.
+.It Ev LEASE
+lease time.
+.It Ev MASK
+network mask.
+.It Ev ROUTER
+router (gateway) IP.
+.It Ev SERVER
+DHCP server IP.
+.It Ev SPID
+shdcp pid.
+.It Ev STATE
+BOUND or RENEW.
+.El
+
+The following variables are set if provided by the server:
+.Bl -tag -width Ds
+.It Ev DNS
+DNS IP.
+.It Ev DNS2
+alternate DNS IP.
+.It Ev DOMAIN
+domain name.
+.It Ev NTP
+NTP IP.
+.It Ev NTP2
+alternate NTP IP.
 .El
 .Sh BUGS
 I'm sure there are plenty. It only currently supports a small subset of

@@ -352,8 +352,10 @@ callout(const char *state)
 	setenv("MASK", buf, 1);
 	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", router[0], router[1], router[2], router[3]);
 	setenv("ROUTER", buf, 1);
-	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[0], dns[1], dns[2], dns[3]);
-	setenv("DNS", buf, 1);
+	if (dns[0]) {
+		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[0], dns[1], dns[2], dns[3]);
+		setenv("DNS", buf, 1);
+	}
 	if (dns[4]) {
 		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[4], dns[5], dns[6], dns[7]);
 		setenv("DNS2", buf, 1);
