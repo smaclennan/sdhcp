@@ -189,7 +189,7 @@ setdns(unsigned char dns[])
 		return;
 
 	if ((fd = creat(resolvconf, 0644)) == -1) {
-		warn("can't change /etc/resolv.conf:");
+		warn("can't change %s", resolvconf);
 		return;
 	}
 	cat(fd, "/etc/resolv.conf.head");
