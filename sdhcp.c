@@ -602,12 +602,10 @@ main(int argc, char *argv[])
 	if (optind < argc)
 		ifname = argv[optind++]; /* interface name */
 	if (optind < argc) {  /* client-id */
-		if (strncmp(argv[optind], "0x", 2) == 0)
-			cid_len = str2bytes(argv[optind] + 2, cid, sizeof(cid));
-		else {
-			strlcpy((char *)cid, argv[optind], sizeof(cid));
-			cid_len = strlen((char *)cid);
-		}
+		char *id = argv[optind];
+		if (*id == '0' && *(id + 1) == 'x')
+			id += 2; // backwards compatibility
+		cid_len = str2bytes(id, cid, sizeof(cid));
 	}
 
 	signal(SIGTERM, cleanexit);

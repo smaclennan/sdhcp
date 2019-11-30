@@ -18,6 +18,18 @@
 is a simple, tiny DHCP client. It runs until it enters the "Bound"
 state, then forks to the background and runs as a daemon to keep
 the lease alive.
+
+The
+.Pa client-id
+is a series of hex bytes. If you don't specify a
+.Pa client-id
+then it defaults to your hardware (MAC) address. The
+.Pa client-id
+is usually a DHCP Unqiue Identifier (DUID).
+If you are connecting to an internet provider and your DHCP address
+changes on every bind, you probably should set the
+.Pa client-id.
+
 .Sh OPTIONS
 .Bl -tag -width Ds
 .It Fl d
