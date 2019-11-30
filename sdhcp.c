@@ -102,6 +102,7 @@ unsigned char hwaddr[ETHER_ADDR_LEN];
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static time_t starttime;
 char *ifname = "eth0";
+static char *resolvconf = "/etc/resolv.conf";
 static unsigned char cid[24];
 static int cid_len;
 static char *program = "";
@@ -187,7 +188,7 @@ setdns(unsigned char dns[])
 	if (dflag == 0)
 		return;
 
-	if ((fd = creat("/etc/resolv.conf", 0644)) == -1) {
+	if ((fd = creat(resolvconf, 0644)) == -1) {
 		warn("can't change /etc/resolv.conf:");
 		return;
 	}
@@ -574,7 +575,7 @@ main(int argc, char *argv[])
 {
 	int rnd, c;
 
-	while ((c = getopt(argc, argv, "de:fi")) != EOF)
+	while ((c = getopt(argc, argv, "de:fir:")) != EOF)
 		switch (c) {
 		case 'd': /* don't update DNS in /etc/resolv.conf */
 			dflag = 0;
@@ -587,6 +588,9 @@ main(int argc, char *argv[])
 			break;
 		case 'i': /* don't set ip */
 			iflag = 0;
+			break;
+		case 'r': /* resolv.conf filename */
+			resolvconf = optarg;
 			break;
 		default:
 			usage();
