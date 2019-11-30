@@ -4,6 +4,8 @@ LOG=/tmp/sdhcp.log
 
 date >> $LOG
 echo "State  $STATE"  >> $LOG
+echo "Ifname $IFNAME" >> $LOG
+echo "SPID   $SPID"   >> $LOG
 echo "Lease  $LEASE"  >> $LOG
 echo "Client $CLIENT" >> $LOG
 echo "Server $SERVER" >> $LOG
