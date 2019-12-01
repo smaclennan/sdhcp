@@ -4,6 +4,8 @@
 
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
+#include <arpa/inet.h>
+
 
 #include <errno.h>
 #include <fcntl.h>
@@ -93,8 +95,6 @@ static const unsigned char params[] = {
 
 /* One socket to rule them all */
 int sock = -1;
-
-static char *argv0;
 
 /* conf */
 unsigned char xid[sizeof(bp.xid)];
@@ -277,7 +277,8 @@ dhcpsend(int type, int how)
 	case DHCPrequest:
 		/* memcpy(bp.ciaddr, client, sizeof bp.ciaddr); */
 		p = optput(p, ODipaddr, client, sizeof(client));
-		p = optput(p, ODserverid, server, sizeof(server));
+		if (how == Unicast)
+			p = optput(p, ODserverid, server, sizeof(server));
 		p = optput(p, ODparams, params, sizeof(params));
 		break;
 	case DHCPrelease:
@@ -412,10 +413,13 @@ static void parse_reply(void)
 }
 
 static void
-run(void)
+run(int fast_start)
 {
 	int forked = 0, t;
 	struct itimerspec timeout = { { 0, 0 }, { 0, 0 } };
+
+	if (fast_start)
+		goto Requesting;
 
 Init:
 	memset(client, 0, sizeof(client));
@@ -540,9 +544,10 @@ cleanexit(int unused)
 }
 
 static void
-usage(void)
+usage(int rc)
 {
-	err(1, "usage: %s [-d] [-e program] [-f] [-i] [ifname] [clientid]\n", argv0);
+	errx(rc, " [-c client_ip] [-d] [-e program] [-f] [-i] [-r resolv.conf]\n"
+		 "\t[ifname] [clientid]");
 }
 
 static uint8_t fromhex(char nibble)
@@ -575,10 +580,17 @@ static int str2bytes(const char *str, uint8_t *bytes, int len)
 int
 main(int argc, char *argv[])
 {
-	int rnd, c;
+	int rnd, c, fast_start = 0;
 
-	while ((c = getopt(argc, argv, "de:fir:")) != EOF)
+	while ((c = getopt(argc, argv, "c:de:fhir:")) != EOF)
 		switch (c) {
+		case 'c': ; // client IP
+			struct in_addr in;
+			if (inet_aton(optarg, &in) == 0)
+				errx(1, "Invalid client address '%s'", optarg);
+			memcpy(client, &in.s_addr, sizeof(client));
+			fast_start = 1;
+			break;
 		case 'd': /* don't update DNS in /etc/resolv.conf */
 			dflag = 0;
 			break;
@@ -588,6 +600,8 @@ main(int argc, char *argv[])
 		case 'f': /* run in foreground */
 			fflag = 1;
 			break;
+		case 'h':
+			usage(0);
 		case 'i': /* don't set ip */
 			iflag = 0;
 			break;
@@ -595,7 +609,7 @@ main(int argc, char *argv[])
 			resolvconf = optarg;
 			break;
 		default:
-			usage();
+			usage(1);
 			break;
 		}
 
@@ -635,7 +649,7 @@ main(int argc, char *argv[])
 	create_timers(0);
 
 	starttime = time(NULL);
-	run();
+	run(fast_start);
 
 	return 0;
 }
