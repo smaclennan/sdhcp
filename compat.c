@@ -335,8 +335,6 @@ udprecv(void *data, size_t n)
 	if (recv.udphdr.uh_sport != htons(67) || recv.udphdr.uh_dport != htons(68))
 		return -1; /* not a dhcp packet */
 
-	if (memcmp(recv.bootp + 1, xid, 4))
-		return -1; /* not our transaction id */
 	if (memcmp(recv.bootp + 7, hwaddr, ETHER_ADDR_LEN))
 		return -1; /* not our mac */
 
@@ -419,8 +417,6 @@ udprecv(void *data, size_t n)
 			err(1, "recvfrom:");
 
 	unsigned *bp = data;
-	if (memcmp(bp + 1, xid, 4))
-		return -1; /* not our transaction id */
 	if (memcmp(bp + 7, hwaddr, ETHER_ADDR_LEN))
 		return -1; /* not our mac */
 

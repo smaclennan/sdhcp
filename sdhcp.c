@@ -97,7 +97,6 @@ static const unsigned char params[] = {
 int sock = -1;
 
 /* conf */
-unsigned char xid[sizeof(bp.xid)];
 unsigned char hwaddr[ETHER_ADDR_LEN];
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static time_t starttime;
@@ -261,7 +260,7 @@ dhcpsend(int type, int how)
 	hnput(bp.op, Bootrequest, 1);
 	hnput(bp.htype, 1, 1);
 	hnput(bp.hlen, 6, 1);
-	memcpy(bp.xid, xid, sizeof(xid));
+	memcpy(bp.xid, hwaddr + 2, 4);
 	hnput(bp.flags, Fbroadcast, sizeof(bp.flags));
 	hnput(bp.secs, time(NULL) - starttime, sizeof(bp.secs));
 	memcpy(bp.magic, magic, sizeof(bp.magic));
@@ -580,7 +579,7 @@ static int str2bytes(const char *str, uint8_t *bytes, int len)
 int
 main(int argc, char *argv[])
 {
-	int rnd, c, fast_start = 0;
+	int c, fast_start = 0;
 
 	while ((c = getopt(argc, argv, "c:de:fhir:")) != EOF)
 		switch (c) {
@@ -640,11 +639,6 @@ main(int argc, char *argv[])
 		memcpy(cid + 1, hwaddr, ETHER_ADDR_LEN);
 		cid_len = ETHER_ADDR_LEN + 1;
 	}
-
-	if ((rnd = open("/dev/urandom", O_RDONLY)) == -1)
-		err(1, "can't open /dev/urandom to generate unique transaction identifier:");
-	read(rnd, xid, sizeof(xid));
-	close(rnd);
 
 	create_timers(0);
 

@@ -23,7 +23,6 @@ extern int timers[];
 extern unsigned char hwaddr[];
 extern unsigned char server[];
 extern unsigned char client[];
-extern unsigned char xid[];
 
 extern char *ifname;
 
