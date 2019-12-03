@@ -542,7 +542,7 @@ cleanexit(int unused)
 	_exit(0);
 }
 
-static void
+static void __attribute__((noreturn))
 usage(int rc)
 {
 	errx(rc, " [-c client_ip] [-d] [-e program] [-f] [-i] [-r resolv.conf]\n"
@@ -609,7 +609,6 @@ main(int argc, char *argv[])
 			break;
 		default:
 			usage(1);
-			break;
 		}
 
 	if (optind < argc)
