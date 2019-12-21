@@ -30,25 +30,6 @@
 /* Warning: assumes little endian */
 #define MAGIC 0x63538263
 
-typedef struct {
-	unsigned char op      [1];
-	unsigned char htype   [1];
-	unsigned char hlen    [1];
-	unsigned char hops    [1];
-	unsigned char xid     [4];
-	unsigned char secs    [2];
-	unsigned char flags   [2];
-	unsigned char ciaddr  [4];
-	unsigned char yiaddr  [4];
-	unsigned char siaddr1  [4];
-	unsigned char giaddr1  [4];
-	unsigned char chaddr  [16];
-	unsigned char sname1   [64];
-	unsigned char file1    [128];
-	unsigned char magic   [4];
-	unsigned char optdata [312-4];
-} Bootp;
-
 struct bootp {
 	uint8_t  op;
 	uint8_t  htype;
@@ -57,8 +38,8 @@ struct bootp {
 	uint32_t xid;
 	uint16_t secs;
 	uint16_t flags;
-	uint32_t ciaddr;	// SAM fixme?
-	uint8_t  yiaddr[4];	// SAM fixme?
+	uint32_t ciaddr;
+	uint32_t yiaddr;
 	uint32_t siaddr;		// unused
 	uint32_t giaddr;		// unused
 	uint64_t chaddr;
@@ -120,7 +101,7 @@ enum {
 	OBend =            255,
 };
 
-static Bootp bp;
+static struct bootp bp;
 
 static const unsigned char params[] = {
 	OBmask, OBrouter, OBdnsserver, OBdomainname, OBntp,
@@ -131,9 +112,10 @@ static const unsigned char params[] = {
 int sock = -1;
 
 /* conf */
-unsigned char hwaddr[ETHER_ADDR_LEN];
+unsigned char hwaddr[ETHER_ADDR_LEN]; // SAM fixme
 uint64_t hwaddr64;
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
+static int hostname_len;
 static time_t starttime;
 char *ifname = "eth0";
 static char *resolvconf = "/etc/resolv.conf";
@@ -235,9 +217,9 @@ setdns(unsigned char dns[])
 }
 
 static void
-optget(Bootp *bp, void *data, int opt, int n)
+optget(struct bootp *bp, void *data, int opt, int n)
 {
-	unsigned char *p = bp->optdata;
+	unsigned char *p = &bp->type_id;
 	unsigned char *top = ((unsigned char *)bp) + sizeof(*bp);
 	int code, len;
 
@@ -290,13 +272,12 @@ dhcpsend(int type, int how)
 
 	memcpy(bootp.optdata, cid, cid_len);
 	uint8_t *p = bootp.optdata + cid_len;
-	p = optput(p, OBhostname, (unsigned char *)hostname, strlen(hostname));
+	p = optput(p, OBhostname, (unsigned char *)hostname, hostname_len);
 
 	switch (type) {
 	case DHCPdiscover:
 		break;
 	case DHCPrequest:
-		/* memcpy(bp.ciaddr, client, sizeof bp.ciaddr); */
 		p = optput(p, ODipaddr, client, sizeof(client));
 		if (how == Unicast)
 			p = optput(p, ODserverid, server, sizeof(server));
@@ -304,7 +285,6 @@ dhcpsend(int type, int how)
 		break;
 	case DHCPrelease:
 		bootp.ciaddr = *(uint32_t *)client;
-// SAM		memcpy(bootp.ciaddr, client, sizeof(client));
 		p = optput(p, ODipaddr, client, sizeof(client));
 		p = optput(p, ODserverid, server, sizeof(server));
 		break;
@@ -454,7 +434,7 @@ Selecting:
 	for (;;) {
 		switch (dhcprecv()) {
 		case DHCPoffer:
-			memcpy(client, bp.yiaddr, sizeof(client));
+			memcpy(client, &bp.yiaddr, sizeof(client));
 			optget(&bp, server, ODserverid, sizeof(server));
 			goto Requesting;
 		case Timeout0:
@@ -649,6 +629,7 @@ main(int argc, char *argv[])
 
 	if (gethostname(hostname, sizeof(hostname)) == -1)
 		err(1, "gethostname:");
+	hostname_len = strlen(hostname);
 
 	open_socket(ifname);
 	get_hw_addr(ifname, hwaddr);
