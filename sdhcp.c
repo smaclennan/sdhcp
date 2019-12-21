@@ -22,7 +22,15 @@
 
 #include "compat.h"
 
-typedef struct bootp {
+/* The xid is redundant on ethernet and wireless networks since we
+ * have a MAC. Since the xid is client only, just hardcode it.
+ */
+#define XID 0x21433412
+
+/* Warning: assumes little endian */
+#define MAGIC 0x63538263
+
+typedef struct {
 	unsigned char op      [1];
 	unsigned char htype   [1];
 	unsigned char hlen    [1];
@@ -32,14 +40,41 @@ typedef struct bootp {
 	unsigned char flags   [2];
 	unsigned char ciaddr  [4];
 	unsigned char yiaddr  [4];
-	unsigned char siaddr  [4];
-	unsigned char giaddr  [4];
+	unsigned char siaddr1  [4];
+	unsigned char giaddr1  [4];
 	unsigned char chaddr  [16];
-	unsigned char sname   [64];
-	unsigned char file    [128];
+	unsigned char sname1   [64];
+	unsigned char file1    [128];
 	unsigned char magic   [4];
 	unsigned char optdata [312-4];
 } Bootp;
+
+struct bootp {
+	uint8_t  op;
+	uint8_t  htype;
+	uint8_t  hlen;
+	uint8_t  hops;			// unused
+	uint32_t xid;
+	uint16_t secs;
+	uint16_t flags;
+	uint32_t ciaddr;	// SAM fixme?
+	uint8_t  yiaddr[4];	// SAM fixme?
+	uint32_t siaddr;		// unused
+	uint32_t giaddr;		// unused
+	uint64_t chaddr;
+	uint64_t chaddr2;		// unused
+	uint8_t  sname[64];		// unused
+	uint8_t  file[128];		// unused
+	uint32_t magic;
+	// optdata
+	// we unroll as much as we can
+	uint8_t  type_id;
+	uint8_t  type_len;
+	uint8_t  type_data;
+	uint8_t  cid_id;
+	uint8_t  cid_len;
+	uint8_t  optdata [312 - 4 - 5];
+} __attribute((packed));
 
 enum {
 	DHCPdiscover =       1,
@@ -86,7 +121,6 @@ enum {
 };
 
 static Bootp bp;
-static const unsigned char magic[] = { 99, 130, 83, 99 };
 
 static const unsigned char params[] = {
 	OBmask, OBrouter, OBdnsserver, OBdomainname, OBntp,
@@ -98,6 +132,7 @@ int sock = -1;
 
 /* conf */
 unsigned char hwaddr[ETHER_ADDR_LEN];
+uint64_t hwaddr64;
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static time_t starttime;
 char *ifname = "eth0";
@@ -109,6 +144,7 @@ int timers[N_TIMERS];
 /* sav */
 unsigned char server[4];
 unsigned char client[4];
+uint32_t client32;
 static unsigned char mask[4];
 static unsigned char router[4];
 static unsigned char dns[8];
@@ -119,15 +155,6 @@ static uint32_t renewaltime, rebindingtime, leasetime;
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
 static int fflag = 0; /* run in foreground */
-
-static void
-hnput(unsigned char *dst, uint32_t src, size_t n)
-{
-	unsigned int i;
-
-	for (i = 0; n--; i++)
-		dst[i] = (src >> (n * 8)) & 0xff;
-}
 
 struct sockaddr *
 iptoaddr(struct sockaddr *ifaddr, unsigned char ip[4], int port)
@@ -241,33 +268,28 @@ optput(unsigned char *p, int opt, const unsigned char *data, size_t len)
 	return p + len;
 }
 
-static unsigned char *
-hnoptput(unsigned char *p, int opt, uint32_t data, size_t len)
-{
-	*p++ = opt;
-	*p++ = (unsigned char)len;
-	hnput(p, data, len);
-
-	return p + len;
-}
-
 static void
 dhcpsend(int type, int how)
 {
-	unsigned char *p;
+	struct bootp bootp = {
+		.op = Bootrequest,
+		.htype = 1,
+		.hlen = 6,
+		.xid = XID,
+		.flags = htons(Fbroadcast),
+		.secs = htons(time(NULL) - starttime),
+		.chaddr = hwaddr64,
+		.magic = MAGIC,
+		// optdata
+		.type_id = ODtype,
+		.type_len = 1,
+		.type_data = type,
+		.cid_id = ODclientid,
+		.cid_len = cid_len,
+	};
 
-	memset(&bp, 0, sizeof(bp));
-	hnput(bp.op, Bootrequest, 1);
-	hnput(bp.htype, 1, 1);
-	hnput(bp.hlen, 6, 1);
-	memcpy(bp.xid, hwaddr + 2, 4);
-	hnput(bp.flags, Fbroadcast, sizeof(bp.flags));
-	hnput(bp.secs, time(NULL) - starttime, sizeof(bp.secs));
-	memcpy(bp.magic, magic, sizeof(bp.magic));
-	memcpy(bp.chaddr, hwaddr, sizeof(hwaddr));
-	p = bp.optdata;
-	p = hnoptput(p, ODtype, type, 1);
-	p = optput(p, ODclientid, cid, cid_len);
+	memcpy(bootp.optdata, cid, cid_len);
+	uint8_t *p = bootp.optdata + cid_len;
 	p = optput(p, OBhostname, (unsigned char *)hostname, strlen(hostname));
 
 	switch (type) {
@@ -281,14 +303,15 @@ dhcpsend(int type, int how)
 		p = optput(p, ODparams, params, sizeof(params));
 		break;
 	case DHCPrelease:
-		memcpy(bp.ciaddr, client, sizeof(client));
+		bootp.ciaddr = *(uint32_t *)client;
+// SAM		memcpy(bootp.ciaddr, client, sizeof(client));
 		p = optput(p, ODipaddr, client, sizeof(client));
 		p = optput(p, ODserverid, server, sizeof(server));
 		break;
 	}
 	*p++ = OBend;
 
-	udpsend(&bp, p - (unsigned char *)&bp, how);
+	udpsend(&bootp, p - (uint8_t *)&bootp, how);
 }
 
 static int
@@ -581,6 +604,8 @@ main(int argc, char *argv[])
 {
 	int c, fast_start = 0;
 
+	_Static_assert(sizeof(struct bootp) == 548, "bootp size");
+
 	while ((c = getopt(argc, argv, "c:de:fhir:")) != EOF)
 		switch (c) {
 		case 'c': ; // client IP
@@ -627,6 +652,7 @@ main(int argc, char *argv[])
 
 	open_socket(ifname);
 	get_hw_addr(ifname, hwaddr);
+	memcpy(&hwaddr64, hwaddr, sizeof(hwaddr));
 
 	/* Set interface up.
 	 * For BSD we seem to need to set ip to 0.0.0.0.
