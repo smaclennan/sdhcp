@@ -118,7 +118,7 @@ static char *ifname = "eth0";
 static char *resolvconf = "/etc/resolv.conf";
 static unsigned char cid[24];
 static int cid_len;
-static char *program = "";
+static char *program;
 int timers[N_TIMERS];
 /* sav */
 struct in_addr server;
@@ -238,7 +238,6 @@ dhcpsend(int type, uint16_t broadcast)
 		.flags = broadcast,
 		.chaddr = hwaddr64,
 		.magic = MAGIC,
-		// optdata
 		.type_id = ODtype,
 		.type_len = 1,
 		.type_data = type,
@@ -314,7 +313,7 @@ callout(const char *state)
 {
 	char buf[32];
 
-	if (*program == 0)
+	if (!program)
 		return;
 
 	setenv("STATE", state, 1);
@@ -391,7 +390,6 @@ Init:
 	client.s_addr = 0;
 	dhcpsend(DHCPdiscover, BROADCAST);
 	timeout.it_value.tv_sec = 1;
-	timeout.it_value.tv_nsec = 0;
 	settimeout(0, &timeout);
 	goto Selecting;
 Selecting:
