@@ -7,8 +7,6 @@
 #undef strlcpy
 size_t strlcpy(char *, const char *, size_t);
 
-enum { Broadcast, Unicast };
-
 extern int sock;
 
 #define N_TIMERS 3
@@ -18,7 +16,7 @@ extern struct in_addr client;
 
 void open_socket(const char *ifname);
 void close_socket(void);
-ssize_t udpsend(void *data, size_t n, int how);
+ssize_t udpsend(void *data, size_t n, int broadcast);
 ssize_t udprecv(void *data, size_t n);
 void get_hw_addr(const char *ifname, unsigned char *hwaddr);
 void create_timers(int recreate);

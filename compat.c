@@ -274,14 +274,14 @@ close_socket(void)
 }
 
 ssize_t
-udpsend(void *data, size_t n, int how)
+udpsend(void *data, size_t n, int broadcast)
 {
 	if (sock == -1)
 		open_socket(cached_ifname);
 
 	memset(&pkt, 0, sizeof(pkt));
 
-	if (how == Broadcast) {
+	if (broadcast) {
 		memset(pkt.ethhdr.ether_dhost, 0xff, ETHER_ADDR_LEN);
 		pkt.iphdr.ip_dst.s_addr = INADDR_BROADCAST;
 	} else {
@@ -406,7 +406,7 @@ void close_socket(void) {}
 
 /* sendto UDP wrapper */
 ssize_t
-udpsend(void *data, size_t n, int how)
+udpsend(void *data, size_t n, int broadcast)
 {
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
@@ -414,7 +414,7 @@ udpsend(void *data, size_t n, int how)
 	struct in_addr ip;
 	int flags = 0;
 
-	if (how == Broadcast) {
+	if (broadcast) {
 		ip.s_addr = INADDR_BROADCAST;
 		flags |= MSG_DONTROUTE;
 	} else

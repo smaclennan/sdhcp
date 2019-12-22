@@ -29,6 +29,7 @@
 
 /* Warning: assumes little endian */
 #define MAGIC 0x63538263
+#define BROADCAST (1 << 7)
 
 struct bootp {
 	uint8_t  op;
@@ -36,7 +37,7 @@ struct bootp {
 	uint8_t  hlen;
 	uint8_t  hops;			// unused
 	uint32_t xid;
-	uint16_t secs;
+	uint16_t secs;			// unused
 	uint16_t flags;
 	struct in_addr ciaddr;
 	struct in_addr yiaddr;
@@ -46,16 +47,18 @@ struct bootp {
 	uint64_t chaddr2;		// unused
 	uint8_t  sname[64];		// unused
 	uint8_t  file[128];		// unused
-	uint32_t magic;
 	// optdata
 	// we unroll as much as we can
+	uint32_t magic;
 	uint8_t  type_id;
 	uint8_t  type_len;
 	uint8_t  type_data;
 	uint8_t  cid_id;
 	uint8_t  cid_len;
-	uint8_t  optdata [312 - 4 - 5];
+	uint8_t  optdata[312 - 9];
 } __attribute((packed));
+
+_Static_assert(sizeof(struct bootp) == 548, "bootp size");
 
 enum {
 	DHCPdiscover =       1,
@@ -66,14 +69,10 @@ enum {
 	DHCPnak,
 	DHCPrelease,
 	DHCPinform,
+
 	Timeout0 =         200,
 	Timeout1,
 	Timeout2,
-
-	Bootrequest =        1,
-	Bootreply =          2,
-	/* bootp flags */
-	Fbroadcast =   1 << 15,
 
 	OBpad =              0,
 	OBmask =             1,
@@ -115,7 +114,6 @@ int sock = -1;
 static uint64_t hwaddr64;
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static int hostname_len;
-static time_t starttime;
 static char *ifname = "eth0";
 static char *resolvconf = "/etc/resolv.conf";
 static unsigned char cid[24];
@@ -134,7 +132,7 @@ static uint32_t renewaltime, rebindingtime, leasetime;
 
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
-static int fflag = 0; /* run in foreground */
+static int fflag;     /* run in foreground */
 
 static void
 setip(struct in_addr ip, struct in_addr mask)
@@ -161,9 +159,10 @@ static void
 cat(int dfd, char *src)
 {
 	char buf[BUFSIZ];
-	int n, fd;
+	int n;
 
-	if ((fd = open(src, O_RDONLY)) == -1)
+	int fd = open(src, O_RDONLY);
+	if (fd == -1)
 		return; /* can't read, but don't error out */
 	while ((n = read(fd, buf, sizeof(buf))) > 0)
 		write(dfd, buf, n);
@@ -174,12 +173,12 @@ static void
 setdns(struct in_addr *dns)
 {
 	char buf[128];
-	int fd;
 
 	if (dflag == 0)
 		return;
 
-	if ((fd = creat(resolvconf, 0644)) == -1) {
+	int fd = creat(resolvconf, 0644);
+	if (fd == -1) {
 		warn("can't change %s", resolvconf);
 		return;
 	}
@@ -229,15 +228,14 @@ optput(unsigned char *p, int opt, const void *data, size_t len)
 }
 
 static void
-dhcpsend(int type, int how)
+dhcpsend(int type, uint16_t broadcast)
 {
 	struct bootp bootp = {
-		.op = Bootrequest,
-		.htype = 1,
-		.hlen = 6,
+		.op = 1,	// boot request
+		.htype = 1,	// ethernet
+		.hlen = ETHER_ADDR_LEN,
 		.xid = XID,
-		.flags = htons(Fbroadcast),
-		.secs = htons(time(NULL) - starttime),
+		.flags = broadcast,
 		.chaddr = hwaddr64,
 		.magic = MAGIC,
 		// optdata
@@ -257,7 +255,7 @@ dhcpsend(int type, int how)
 		break;
 	case DHCPrequest:
 		p = optput(p, ODipaddr, &client, sizeof(client));
-		if (how == Unicast)
+		if (broadcast == 0)
 			p = optput(p, ODserverid, &server, sizeof(server));
 		p = optput(p, ODparams, params, sizeof(params));
 		break;
@@ -269,7 +267,7 @@ dhcpsend(int type, int how)
 	}
 	*p++ = OBend;
 
-	udpsend(&bootp, p - (uint8_t *)&bootp, how);
+	udpsend(&bootp, p - (uint8_t *)&bootp, broadcast);
 }
 
 static int
@@ -391,7 +389,7 @@ run(int fast_start)
 
 Init:
 	client.s_addr = 0;
-	dhcpsend(DHCPdiscover, Broadcast);
+	dhcpsend(DHCPdiscover, BROADCAST);
 	timeout.it_value.tv_sec = 1;
 	timeout.it_value.tv_nsec = 0;
 	settimeout(0, &timeout);
@@ -409,7 +407,7 @@ Selecting:
 	}
 Requesting:
 	for (t = 4; t <= 64; t *= 2) {
-		dhcpsend(DHCPrequest, Broadcast);
+		dhcpsend(DHCPrequest, BROADCAST);
 		timeout.it_value.tv_sec = t;
 		settimeout(0, &timeout);
 		for (;;) {
@@ -447,7 +445,7 @@ Bound:
 	}
 	forked = 1; /* doesn't hurt to always set this */
 
-	/* call after bound to get pid */
+	/* call after fork() to get pid */
 	callout("BOUND");
 
 Renewed:
@@ -468,7 +466,7 @@ Renewed:
 		}
 	}
 Renewing:
-	dhcpsend(DHCPrequest, Unicast);
+	dhcpsend(DHCPrequest, 0);
 	calctimeout(1, &timeout);
 	settimeout(0, &timeout);
 	for (;;) {
@@ -489,8 +487,8 @@ Renewing:
 Rebinding:
 	calctimeout(2, &timeout);
 	settimeout(0, &timeout);
-	dhcpsend(DHCPrequest, Broadcast);
- 	for (;;) {
+	dhcpsend(DHCPrequest, BROADCAST);
+	for (;;) {
 		switch (dhcprecv()) {
 		case DHCPack:
 			goto Bound;
@@ -507,7 +505,7 @@ static void
 cleanexit(int unused)
 {
 	(void)unused;
-	dhcpsend(DHCPrelease, Unicast);
+	dhcpsend(DHCPrelease, 0);
 	_exit(0);
 }
 
@@ -550,11 +548,9 @@ main(int argc, char *argv[])
 {
 	int c, fast_start = 0;
 
-	_Static_assert(sizeof(struct bootp) == 548, "bootp size");
-
 	while ((c = getopt(argc, argv, "c:de:fhir:")) != EOF)
 		switch (c) {
-		case 'c': ; // client IP
+		case 'c': // client IP
 			if (inet_aton(optarg, &client) == 0)
 				errx(1, "Invalid client address '%s'", optarg);
 			fast_start = 1;
@@ -616,7 +612,6 @@ main(int argc, char *argv[])
 
 	create_timers(0);
 
-	starttime = time(NULL);
 	run(fast_start);
 
 	return 0;
