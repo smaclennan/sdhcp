@@ -38,8 +38,8 @@ struct bootp {
 	uint32_t xid;
 	uint16_t secs;
 	uint16_t flags;
-	uint32_t ciaddr;
-	uint32_t yiaddr;
+	struct in_addr ciaddr;
+	struct in_addr yiaddr;
 	uint32_t siaddr;		// unused
 	uint32_t giaddr;		// unused
 	uint64_t chaddr;
@@ -112,25 +112,23 @@ static const unsigned char params[] = {
 int sock = -1;
 
 /* conf */
-unsigned char hwaddr[ETHER_ADDR_LEN]; // SAM fixme
-uint64_t hwaddr64;
+static uint64_t hwaddr64;
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static int hostname_len;
 static time_t starttime;
-char *ifname = "eth0";
+static char *ifname = "eth0";
 static char *resolvconf = "/etc/resolv.conf";
 static unsigned char cid[24];
 static int cid_len;
 static char *program = "";
 int timers[N_TIMERS];
 /* sav */
-unsigned char server[4];
-unsigned char client[4];
-uint32_t client32;
-static unsigned char mask[4];
-static unsigned char router[4];
-static unsigned char dns[8];
-static unsigned char ntp[8];
+struct in_addr server;
+struct in_addr client;
+static struct in_addr mask;
+static struct in_addr router;
+static struct in_addr dns[2];
+static struct in_addr ntp[2];
 static char domainname[64];
 static uint32_t renewaltime, rebindingtime, leasetime;
 
@@ -138,23 +136,8 @@ static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
 static int fflag = 0; /* run in foreground */
 
-struct sockaddr *
-iptoaddr(struct sockaddr *ifaddr, unsigned char ip[4], int port)
-{
-	struct sockaddr_in *in = (struct sockaddr_in *)ifaddr;
-
-#ifndef __linux__
-	in->sin_len = sizeof(struct sockaddr_in);
-#endif
-	in->sin_family = AF_INET;
-	in->sin_port = htons(port);
-	memcpy(&(in->sin_addr), ip, sizeof(in->sin_addr));
-
-	return ifaddr;
-}
-
 static void
-setip(unsigned char ip[4], unsigned char mask[4])
+setip(struct in_addr ip, struct in_addr mask)
 {
 	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 	if (fd == -1)
@@ -164,9 +147,9 @@ setip(unsigned char ip[4], unsigned char mask[4])
 	memset(&ifreq, 0, sizeof(ifreq));
 
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
-	iptoaddr(&ifreq.ifr_addr, ip, 0);
+	((struct sockaddr_in *)&ifreq.ifr_addr)->sin_addr = ip;
 	ioctl(fd, SIOCSIFADDR, &ifreq);
-	iptoaddr(&ifreq.ifr_addr, mask, 0);
+	((struct sockaddr_in *)&ifreq.ifr_addr)->sin_addr = mask;
 	ioctl(fd, SIOCSIFNETMASK, &ifreq);
 	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
 	ioctl(fd, SIOCSIFFLAGS, &ifreq);
@@ -188,7 +171,7 @@ cat(int dfd, char *src)
 }
 
 static void
-setdns(unsigned char dns[])
+setdns(struct in_addr *dns)
 {
 	char buf[128];
 	int fd;
@@ -201,17 +184,12 @@ setdns(unsigned char dns[])
 		return;
 	}
 	cat(fd, "/etc/resolv.conf.head");
-	if (snprintf(buf, sizeof(buf) - 1, "\nnameserver %d.%d.%d.%d\n",
-	         dns[0], dns[1], dns[2], dns[3]) > 0)
-		write(fd, buf, strlen(buf));
-	if (dns[4])
-		if (snprintf(buf, sizeof(buf) - 1, "nameserver %d.%d.%d.%d\n",
-					 dns[4], dns[5], dns[6], dns[7]) > 0)
-			write(fd, buf, strlen(buf));
-	if (*domainname) {
-		snprintf(buf, sizeof(buf) - 1, "search %s\n", domainname);
-		write(fd, buf, strlen(buf));
-	}
+	int n = snprintf(buf, sizeof(buf), "\nnameserver %s\n", inet_ntoa(dns[0]));
+	if (dns[1].s_addr)
+		n += snprintf(buf + n, sizeof(buf) - n, "nameserver %s\n", inet_ntoa(dns[1]));
+	if (*domainname)
+		n += snprintf(buf + n, sizeof(buf) - n, "search %s\n", domainname);
+	write(fd, buf, n);
 	cat(fd, "/etc/resolv.conf.tail");
 	close(fd);
 }
@@ -241,7 +219,7 @@ optget(struct bootp *bp, void *data, int opt, int n)
 }
 
 static unsigned char *
-optput(unsigned char *p, int opt, const unsigned char *data, size_t len)
+optput(unsigned char *p, int opt, const void *data, size_t len)
 {
 	*p++ = opt;
 	*p++ = (unsigned char)len;
@@ -278,15 +256,15 @@ dhcpsend(int type, int how)
 	case DHCPdiscover:
 		break;
 	case DHCPrequest:
-		p = optput(p, ODipaddr, client, sizeof(client));
+		p = optput(p, ODipaddr, &client, sizeof(client));
 		if (how == Unicast)
-			p = optput(p, ODserverid, server, sizeof(server));
+			p = optput(p, ODserverid, &server, sizeof(server));
 		p = optput(p, ODparams, params, sizeof(params));
 		break;
 	case DHCPrelease:
-		bootp.ciaddr = *(uint32_t *)client;
-		p = optput(p, ODipaddr, client, sizeof(client));
-		p = optput(p, ODserverid, server, sizeof(server));
+		bootp.ciaddr = client;
+		p = optput(p, ODipaddr, &client, sizeof(client));
+		p = optput(p, ODserverid, &server, sizeof(server));
 		break;
 	}
 	*p++ = OBend;
@@ -347,32 +325,20 @@ callout(const char *state)
 	setenv("SPID", buf, 1);
 	snprintf(buf, sizeof(buf), "%u", leasetime);
 	setenv("LEASE", buf, 1);
-	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", server[0], server[1], server[2], server[3]);
-	setenv("SERVER", buf, 1);
-	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", client[0], client[1], client[2], client[3]);
-	setenv("CLIENT", buf, 1);
-	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3]);
-	setenv("MASK", buf, 1);
-	snprintf(buf, sizeof(buf), "%d.%d.%d.%d", router[0], router[1], router[2], router[3]);
-	setenv("ROUTER", buf, 1);
-	if (dns[0]) {
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[0], dns[1], dns[2], dns[3]);
-		setenv("DNS", buf, 1);
-	}
-	if (dns[4]) {
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", dns[4], dns[5], dns[6], dns[7]);
-		setenv("DNS2", buf, 1);
-	}
+	setenv("SERVER", inet_ntoa(server), 1);
+	setenv("CLIENT", inet_ntoa(client), 1);
+	setenv("MASK",   inet_ntoa(mask), 1);
+	setenv("ROUTER", inet_ntoa(router), 1);
+	if (dns[0].s_addr)
+		setenv("DNS", inet_ntoa(dns[0]), 1);
+	if (dns[1].s_addr)
+		setenv("DNS2", inet_ntoa(dns[1]), 1);
 	if (*domainname)
 		setenv("DOMAIN", domainname, 1);
-	if (ntp[0]) {
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[0], ntp[1], ntp[2], ntp[3]);
-		setenv("NTP", buf, 1);
-	}
-	if (ntp[4]) {
-		snprintf(buf, sizeof(buf), "%d.%d.%d.%d", ntp[4], ntp[5], ntp[6], ntp[7]);
-		setenv("NTP2", buf, 1);
-	}
+	if (ntp[0].s_addr)
+		setenv("NTP", inet_ntoa(ntp[0]), 1);
+	if (ntp[1].s_addr)
+		setenv("NTP2", inet_ntoa(ntp[1]), 1);
 	system(program);
 }
 
@@ -401,10 +367,10 @@ calctimeout(int n, struct itimerspec *ts)
 
 static void parse_reply(void)
 {
-	optget(&bp, mask, OBmask, sizeof(mask));
-	optget(&bp, router, OBrouter, sizeof(router));
-	optget(&bp, dns, OBdnsserver, sizeof(dns));
-	optget(&bp, ntp, OBntp, sizeof(ntp));
+	optget(&bp, &mask, OBmask, sizeof(mask));
+	optget(&bp, &router, OBrouter, sizeof(router));
+	optget(&bp, &dns, OBdnsserver, sizeof(dns));
+	optget(&bp, &ntp, OBntp, sizeof(ntp));
 	optget(&bp, domainname, OBdomainname, sizeof(domainname));
 	optget(&bp, &renewaltime, ODrenewaltime, sizeof(renewaltime));
 	optget(&bp, &rebindingtime, ODrebindingtime, sizeof(rebindingtime));
@@ -424,7 +390,7 @@ run(int fast_start)
 		goto Requesting;
 
 Init:
-	memset(client, 0, sizeof(client));
+	client.s_addr = 0;
 	dhcpsend(DHCPdiscover, Broadcast);
 	timeout.it_value.tv_sec = 1;
 	timeout.it_value.tv_nsec = 0;
@@ -434,8 +400,8 @@ Selecting:
 	for (;;) {
 		switch (dhcprecv()) {
 		case DHCPoffer:
-			memcpy(client, &bp.yiaddr, sizeof(client));
-			optget(&bp, server, ODserverid, sizeof(server));
+			client = bp.yiaddr;
+			optget(&bp, &server, ODserverid, sizeof(server));
 			goto Requesting;
 		case Timeout0:
 			goto Init;
@@ -589,10 +555,8 @@ main(int argc, char *argv[])
 	while ((c = getopt(argc, argv, "c:de:fhir:")) != EOF)
 		switch (c) {
 		case 'c': ; // client IP
-			struct in_addr in;
-			if (inet_aton(optarg, &in) == 0)
+			if (inet_aton(optarg, &client) == 0)
 				errx(1, "Invalid client address '%s'", optarg);
-			memcpy(client, &in.s_addr, sizeof(client));
 			fast_start = 1;
 			break;
 		case 'd': /* don't update DNS in /etc/resolv.conf */
@@ -632,13 +596,17 @@ main(int argc, char *argv[])
 	hostname_len = strlen(hostname);
 
 	open_socket(ifname);
+
+	unsigned char hwaddr[ETHER_ADDR_LEN];
 	get_hw_addr(ifname, hwaddr);
 	memcpy(&hwaddr64, hwaddr, sizeof(hwaddr));
 
 	/* Set interface up.
 	 * For BSD we seem to need to set ip to 0.0.0.0.
 	 */
-	setip(IP(0,0,0,0), IP(255,0,0,0));
+	struct in_addr zero = { 0 };
+	struct in_addr mask = { .s_addr = htonl(0xff000000) };
+	setip(zero, mask);
 
 	if (cid_len == 0) {
 		cid[0] = 1;

@@ -13,10 +13,12 @@
 
 #include "compat.h"
 
+static uint8_t hwaddr[ETHER_ADDR_LEN];
+
 #ifdef __linux__
 
 void
-get_hw_addr(const char *ifname, unsigned char *hwaddr)
+get_hw_addr(const char *ifname, unsigned char *hwaddr_in)
 {
 	struct ifreq ifreq;
 
@@ -26,6 +28,7 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr)
 		err(1, "SIOCGIFHWADDR");
 
 	memcpy(hwaddr, ifreq.ifr_hwaddr.sa_data, ETHER_ADDR_LEN);
+	memcpy(hwaddr_in, ifreq.ifr_hwaddr.sa_data, ETHER_ADDR_LEN);
 }
 
 void
@@ -66,8 +69,23 @@ strlcpy(char *dst, const char *src, size_t dstlen)
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 
+static struct sockaddr *
+iptoaddr(struct sockaddr *ifaddr, struct in_addr ip, int port)
+{
+	struct sockaddr_in *in = (struct sockaddr_in *)ifaddr;
+
+#ifndef __linux__
+	in->sin_len = sizeof(struct sockaddr_in);
+#endif
+	in->sin_family = AF_INET;
+	in->sin_port = htons(port);
+	in->sin_addr = ip;
+
+	return ifaddr;
+}
+
 void
-get_hw_addr(const char *ifname, unsigned char *hwaddr)
+get_hw_addr(const char *ifname, unsigned char *hwaddr_out)
 {
 	struct ifaddrs *ifa = NULL;
 	struct sockaddr_dl *sa = NULL;
@@ -81,6 +99,7 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr)
 			sa = (struct sockaddr_dl *)p->ifa_addr;
 			if (sa->sdl_type == 1 || sa->sdl_type == 6) { // ethernet
 				memcpy(hwaddr, LLADDR(sa), ETHER_ADDR_LEN);
+				memcpy(hwaddr_out, hwaddr, ETHER_ADDR_LEN);
 				freeifaddrs(ifa);
 				return;
 			} else
@@ -201,6 +220,7 @@ static struct pseudohdr
 
 static unsigned char server_mac[ETHER_ADDR_LEN];
 static unsigned int ifindex;
+static const char *cached_ifname;
 
 /* RFC 1071. */
 static uint16_t
@@ -224,7 +244,7 @@ chksum16(const void *buf, int count)
 	return ~sum;
 }
 
-/* open a socket - ifreq will have ifname filled in */
+/* open a socket */
 void
 open_socket(const char *ifname)
 {
@@ -243,6 +263,7 @@ open_socket(const char *ifname)
 	if (ioctl(sock, SIOCGIFINDEX, &ifreq))
 		err(1, "SIOCGIFINDEX");
 	ifindex = ifreq.ifr_ifindex;
+	cached_ifname = ifname;
 }
 
 void
@@ -256,7 +277,7 @@ ssize_t
 udpsend(void *data, size_t n, int how)
 {
 	if (sock == -1)
-		open_socket(ifname);
+		open_socket(cached_ifname);
 
 	memset(&pkt, 0, sizeof(pkt));
 
@@ -265,7 +286,7 @@ udpsend(void *data, size_t n, int how)
 		pkt.iphdr.ip_dst.s_addr = INADDR_BROADCAST;
 	} else {
 		memcpy(&pkt.ethhdr.ether_dhost, server_mac, ETHER_ADDR_LEN);
-		memcpy(&pkt.iphdr.ip_dst, server, 4);
+		pkt.iphdr.ip_dst = server;
 	}
 
 	memcpy(pkt.ethhdr.ether_shost, hwaddr, ETHER_ADDR_LEN);
@@ -279,7 +300,7 @@ udpsend(void *data, size_t n, int how)
 	pkt.iphdr.ip_off = htons(0x4000); /* DF set */
 	pkt.iphdr.ip_ttl = 16;
 	pkt.iphdr.ip_p = IPPROTO_UDP;
-	memcpy(&pkt.iphdr.ip_src, client, 4);
+	pkt.iphdr.ip_src = client;
 	pkt.iphdr.ip_sum = chksum16(&pkt.iphdr, 20);
 
 	pkt.udphdr.uh_sport = htons(68);
@@ -375,7 +396,8 @@ open_socket(const char *ifname)
 
 	/* needed */
 	struct sockaddr addr;
-	iptoaddr(&addr, IP(0, 0, 0, 0), 68);
+	struct in_addr zero = { 0 };
+	iptoaddr(&addr, zero, 68);
 	if (bind(sock, (void*)&addr, sizeof(addr)) != 0)
 		err(1, "bind:");
 }
@@ -389,14 +411,14 @@ udpsend(void *data, size_t n, int how)
 	struct sockaddr addr;
 	socklen_t addrlen = sizeof(addr);
 	ssize_t sent;
-	unsigned char ip[4];
+	struct in_addr ip;
 	int flags = 0;
 
 	if (how == Broadcast) {
-		*(uint32_t *)ip = INADDR_BROADCAST;
+		ip.s_addr = INADDR_BROADCAST;
 		flags |= MSG_DONTROUTE;
 	} else
-		memcpy(ip, server, 4);
+		ip = server;
 
 	iptoaddr(&addr, ip, 67); /* bootp server */
 	while ((sent = sendto(sock, data, n, flags, &addr, addrlen)) == -1)
@@ -427,18 +449,14 @@ udprecv(void *data, size_t n)
 
 #ifdef __linux__
 void
-setgw(unsigned char gateway[4])
+setgw(struct in_addr gw)
 {
 	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
 	if (fd == -1)
 		err(1, "can't set gw, socket:");
 
-	struct rtentry rtreq;
-	memset(&rtreq, 0, sizeof(rtreq));
-	rtreq.rt_flags = (RTF_UP | RTF_GATEWAY);
-	iptoaddr(&(rtreq.rt_gateway), gateway, 0);
-	iptoaddr(&(rtreq.rt_genmask), IP(0, 0, 0, 0), 0);
-	iptoaddr(&(rtreq.rt_dst), IP(0, 0, 0, 0), 0);
+	struct rtentry rtreq = { .rt_flags = RTF_UP | RTF_GATEWAY };
+	((struct sockaddr_in *)&rtreq.rt_gateway)->sin_addr = gw;
 	ioctl(fd, SIOCADDRT, &rtreq);
 
 	close(fd);
@@ -449,7 +467,7 @@ setgw(unsigned char gateway[4])
 #define RTM_FLAGS (RTF_STATIC | RTF_UP | RTF_GATEWAY)
 
 static int
-rtmsg_send(int s, int cmd, unsigned char gateway[4])
+rtmsg_send(int s, int cmd, struct in_addr gw)
 {
 	struct rtmsg {
 		struct rt_msghdr hdr;
@@ -469,13 +487,10 @@ rtmsg_send(int s, int cmd, unsigned char gateway[4])
 	sa.sin_family = AF_INET;
 
 	unsigned char *cp = rtmsg.data;
-
-	iptoaddr((struct sockaddr *)cp, IP(0,0,0,0), 0); // DST
+	cp += sizeof(struct sockaddr_in);				// DST is zero
+	((struct sockaddr_in *)cp)->s_addr = gateway;	// GATEWAY
 	cp += sizeof(struct sockaddr_in);
-	iptoaddr((struct sockaddr *)cp, gateway, 0);     // GATEWAY
-	cp += sizeof(struct sockaddr_in);
-	iptoaddr((struct sockaddr *)cp, IP(0,0,0,0), 0); // NETMASK
-	cp += sizeof(struct sockaddr_in);
+	cp += sizeof(struct sockaddr_in);				// NETMASK is zero
 
 	rtmsg.hdr.rtm_msglen = cp - (unsigned char *)&rtmsg;
 	if (write(s, &rtmsg, rtmsg.hdr.rtm_msglen) < 0)
@@ -485,7 +500,7 @@ rtmsg_send(int s, int cmd, unsigned char gateway[4])
 }
 
 void
-setgw(unsigned char gateway[4])
+setgw(struct in_addr gw)
 {
 	int s = socket(PF_ROUTE, SOCK_RAW, 0);
 	if (s < 0)

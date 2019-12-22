@@ -13,11 +13,8 @@ extern int sock;
 
 #define N_TIMERS 3
 extern int timers[];
-extern unsigned char hwaddr[];
-extern unsigned char server[];
-extern unsigned char client[];
-
-extern char *ifname;
+extern struct in_addr server;
+extern struct in_addr client;
 
 void open_socket(const char *ifname);
 void close_socket(void);
@@ -25,11 +22,7 @@ ssize_t udpsend(void *data, size_t n, int how);
 ssize_t udprecv(void *data, size_t n);
 void get_hw_addr(const char *ifname, unsigned char *hwaddr);
 void create_timers(int recreate);
-void setgw(unsigned char gateway[4]);
-
-struct sockaddr *iptoaddr(struct sockaddr *ifaddr,
-						  unsigned char ip[4], int port);
-#define IP(a, b, c, d) (unsigned char[4]){ a, b, c, d }
+void setgw(struct in_addr gw);
 
 #ifdef __linux__
 
