@@ -69,19 +69,15 @@ strlcpy(char *dst, const char *src, size_t dstlen)
 #include <ifaddrs.h>
 #include <net/if_dl.h>
 
-static struct sockaddr *
+static void
 iptoaddr(struct sockaddr *ifaddr, struct in_addr ip, int port)
 {
 	struct sockaddr_in *in = (struct sockaddr_in *)ifaddr;
 
-#ifndef __linux__
 	in->sin_len = sizeof(struct sockaddr_in);
-#endif
 	in->sin_family = AF_INET;
 	in->sin_port = htons(port);
 	in->sin_addr = ip;
-
-	return ifaddr;
 }
 
 void
@@ -488,7 +484,7 @@ rtmsg_send(int s, int cmd, struct in_addr gw)
 
 	unsigned char *cp = rtmsg.data;
 	cp += sizeof(struct sockaddr_in);				// DST is zero
-	((struct sockaddr_in *)cp)->s_addr = gateway;	// GATEWAY
+	((struct sockaddr_in *)cp)->sin_addr = gw;		// GATEWAY
 	cp += sizeof(struct sockaddr_in);
 	cp += sizeof(struct sockaddr_in);				// NETMASK is zero
 
@@ -508,13 +504,13 @@ setgw(struct in_addr gw)
 
 	shutdown(s, SHUT_RD); /* Don't want to read back our messages */
 
-	if (rtmsg_send(s, RTM_ADD, gateway) == 0) {
+	if (rtmsg_send(s, RTM_ADD, gw) == 0) {
 		close(s);
 		return;
 	}
 
 	if (errno == EEXIST)
-		if (rtmsg_send(s, RTM_CHANGE, gateway) == 0) {
+		if (rtmsg_send(s, RTM_CHANGE, gw) == 0) {
 			close(s);
 			return;
 		}
