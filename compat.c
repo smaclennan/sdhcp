@@ -427,7 +427,6 @@ ssize_t
 udpsend(void *data, size_t n, int broadcast)
 {
 	struct sockaddr addr;
-	socklen_t addrlen = sizeof(addr); // SAM
 	ssize_t sent;
 	struct in_addr ip;
 	int flags = 0;
@@ -439,7 +438,7 @@ udpsend(void *data, size_t n, int broadcast)
 		ip = server;
 
 	iptoaddr(&addr, ip, 67); /* bootp server */
-	while ((sent = sendto(sock, data, n, flags, &addr, addrlen)) == -1)
+	while ((sent = sendto(sock, data, n, flags, &addr, sizeof(addr))) == -1)
 		if (errno != EINTR)
 			err(1, "sendto:");
 
@@ -489,7 +488,7 @@ rtmsg_send(int s, int cmd, struct in_addr gw)
 {
 	struct rtmsg {
 		struct rt_msghdr hdr;
-		unsigned char data[512]; // SAM way too big
+		struct sockaddr data[3];
 	} rtmsg;
 
 	memset(&rtmsg, 0, sizeof(rtmsg));
@@ -504,15 +503,11 @@ rtmsg_send(int s, int cmd, struct in_addr gw)
 	sa.sin_len = sizeof(sa);
 	sa.sin_family = AF_INET;
 
-	unsigned char *cp = rtmsg.data;
-	iptoaddr((struct sockaddr *)cp, ip_zero, 0); // DST
-	cp += sizeof(struct sockaddr_in);
-	iptoaddr((struct sockaddr *)cp, gw, 0);      // GATEWAY
-	cp += sizeof(struct sockaddr_in);
-	iptoaddr((struct sockaddr *)cp, ip_zero, 0); // NETMASK
-	cp += sizeof(struct sockaddr_in);
+	iptoaddr(&rtmsg.data[0], ip_zero, 0); // DST
+	iptoaddr(&rtmsg.data[1], gw, 0);      // GATEWAY
+	iptoaddr(&rtmsg.data[2], ip_zero, 0); // NETMASK
 
-	rtmsg.hdr.rtm_msglen = (uint8_t *)cp - (uint8_t *)&rtmsg;
+	rtmsg.hdr.rtm_msglen = sizeof(rtmsg);
 	if (write(s, &rtmsg, rtmsg.hdr.rtm_msglen) < 0)
 		return -1;
 
