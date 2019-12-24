@@ -363,6 +363,8 @@ udprecv(void *data, size_t n)
 
 #else
 
+static struct in_addr ip_zero;
+
 /* open a socket - ifreq will have ifname filled in */
 void
 open_socket(const char *ifname)
@@ -392,8 +394,7 @@ open_socket(const char *ifname)
 
 	/* needed */
 	struct sockaddr addr;
-	struct in_addr zero = { 0 };
-	iptoaddr(&addr, zero, 68);
+	iptoaddr(&addr, ip_zero, 68);
 	if (bind(sock, (void*)&addr, sizeof(addr)) != 0)
 		err(1, "bind:");
 }
@@ -483,10 +484,12 @@ rtmsg_send(int s, int cmd, struct in_addr gw)
 	sa.sin_family = AF_INET;
 
 	unsigned char *cp = rtmsg.data;
-	cp += sizeof(struct sockaddr_in);				// DST is zero
-	((struct sockaddr_in *)cp)->sin_addr = gw;		// GATEWAY
+	iptoaddr((struct sockaddr *)cp, ip_zero, 0); // DST
 	cp += sizeof(struct sockaddr_in);
-	cp += sizeof(struct sockaddr_in);				// NETMASK is zero
+	iptoaddr((struct sockaddr *)cp, gw, 0);      // GATEWAY
+	cp += sizeof(struct sockaddr_in);
+	iptoaddr((struct sockaddr *)cp, ip_zero, 0); // NETMASK
+	cp += sizeof(struct sockaddr_in);
 
 	rtmsg.hdr.rtm_msglen = cp - (unsigned char *)&rtmsg;
 	if (write(s, &rtmsg, rtmsg.hdr.rtm_msglen) < 0)
