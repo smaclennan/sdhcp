@@ -15,6 +15,41 @@
 
 static uint8_t hwaddr[ETHER_ADDR_LEN];
 
+static void
+iptoaddr(struct sockaddr *ifaddr, struct in_addr ip, int port)
+{
+	struct sockaddr_in *in = (struct sockaddr_in *)ifaddr;
+
+#ifndef __linux__
+	in->sin_len = sizeof(struct sockaddr_in);
+#endif
+	in->sin_family = AF_INET;
+	in->sin_port = htons(port);
+	in->sin_addr = ip;
+}
+
+void
+setip(struct in_addr ip, struct in_addr mask)
+{
+	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (fd == -1)
+		err(1, "can't set ip, socket:");
+
+	struct ifreq ifreq;
+	memset(&ifreq, 0, sizeof(ifreq));
+
+	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+	// Linux only needs the sin_addr, but BSDish needs full sockaddr
+	iptoaddr(&ifreq.ifr_addr, ip, 0);
+	ioctl(fd, SIOCSIFADDR, &ifreq);
+	iptoaddr(&ifreq.ifr_addr, mask, 0);
+	ioctl(fd, SIOCSIFNETMASK, &ifreq);
+	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
+	ioctl(fd, SIOCSIFFLAGS, &ifreq);
+
+	close(fd);
+}
+
 #ifdef __linux__
 
 void
@@ -68,40 +103,6 @@ strlcpy(char *dst, const char *src, size_t dstlen)
 
 #include <ifaddrs.h>
 #include <net/if_dl.h>
-
-static void
-iptoaddr(struct sockaddr *ifaddr, struct in_addr ip, int port)
-{
-	struct sockaddr_in *in = (struct sockaddr_in *)ifaddr;
-
-	in->sin_len = sizeof(struct sockaddr_in);
-	in->sin_family = AF_INET;
-	in->sin_port = htons(port);
-	in->sin_addr = ip;
-}
-
-void
-setip(struct in_addr ip, struct in_addr mask)
-{
-	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
-	if (fd == -1)
-		err(1, "can't set ip, socket:");
-
-	struct ifreq ifreq;
-	memset(&ifreq, 0, sizeof(ifreq));
-
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
-	// Linux only needs the sin_addr, but BSDish needs full sockaddr
-	iptoaddr(&ifreq.ifr_addr, ip, 0);
-	ioctl(fd, SIOCSIFADDR, &ifreq);
-	iptoaddr(&ifreq.ifr_addr, mask, 0);
-	ioctl(fd, SIOCSIFNETMASK, &ifreq);
-	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
-	ioctl(fd, SIOCSIFFLAGS, &ifreq);
-
-	close(fd);
-}
-
 
 void
 get_hw_addr(const char *ifname, unsigned char *hwaddr_out)
