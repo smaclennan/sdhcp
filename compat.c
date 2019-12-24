@@ -81,6 +81,29 @@ iptoaddr(struct sockaddr *ifaddr, struct in_addr ip, int port)
 }
 
 void
+setip(struct in_addr ip, struct in_addr mask)
+{
+	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
+	if (fd == -1)
+		err(1, "can't set ip, socket:");
+
+	struct ifreq ifreq;
+	memset(&ifreq, 0, sizeof(ifreq));
+
+	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+	// Linux only needs the sin_addr, but BSDish needs full sockaddr
+	iptoaddr(&ifreq.ifr_addr, ip, 0);
+	ioctl(fd, SIOCSIFADDR, &ifreq);
+	iptoaddr(&ifreq.ifr_addr, mask, 0);
+	ioctl(fd, SIOCSIFNETMASK, &ifreq);
+	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
+	ioctl(fd, SIOCSIFFLAGS, &ifreq);
+
+	close(fd);
+}
+
+
+void
 get_hw_addr(const char *ifname, unsigned char *hwaddr_out)
 {
 	struct ifaddrs *ifa = NULL;
@@ -216,7 +239,6 @@ static struct pseudohdr
 
 static unsigned char server_mac[ETHER_ADDR_LEN];
 static unsigned int ifindex;
-static const char *cached_ifname;
 
 /* RFC 1071. */
 static uint16_t
@@ -259,7 +281,6 @@ open_socket(const char *ifname)
 	if (ioctl(sock, SIOCGIFINDEX, &ifreq))
 		err(1, "SIOCGIFINDEX");
 	ifindex = ifreq.ifr_ifindex;
-	cached_ifname = ifname;
 }
 
 void
@@ -273,7 +294,7 @@ ssize_t
 udpsend(void *data, size_t n, int broadcast)
 {
 	if (sock == -1)
-		open_socket(cached_ifname);
+		open_socket(ifname);
 
 	memset(&pkt, 0, sizeof(pkt));
 
@@ -406,7 +427,7 @@ ssize_t
 udpsend(void *data, size_t n, int broadcast)
 {
 	struct sockaddr addr;
-	socklen_t addrlen = sizeof(addr);
+	socklen_t addrlen = sizeof(addr); // SAM
 	ssize_t sent;
 	struct in_addr ip;
 	int flags = 0;
@@ -468,7 +489,7 @@ rtmsg_send(int s, int cmd, struct in_addr gw)
 {
 	struct rtmsg {
 		struct rt_msghdr hdr;
-		unsigned char data[512];
+		unsigned char data[512]; // SAM way too big
 	} rtmsg;
 
 	memset(&rtmsg, 0, sizeof(rtmsg));
@@ -491,7 +512,7 @@ rtmsg_send(int s, int cmd, struct in_addr gw)
 	iptoaddr((struct sockaddr *)cp, ip_zero, 0); // NETMASK
 	cp += sizeof(struct sockaddr_in);
 
-	rtmsg.hdr.rtm_msglen = cp - (unsigned char *)&rtmsg;
+	rtmsg.hdr.rtm_msglen = (uint8_t *)cp - (uint8_t *)&rtmsg;
 	if (write(s, &rtmsg, rtmsg.hdr.rtm_msglen) < 0)
 		return -1;
 

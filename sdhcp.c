@@ -114,7 +114,7 @@ int sock = -1;
 static uint64_t hwaddr64;
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
 static int hostname_len;
-static char *ifname = "eth0";
+const char *ifname = "eth0";
 static char *resolvconf = "/etc/resolv.conf";
 static unsigned char cid[24];
 static int cid_len;
@@ -133,27 +133,6 @@ static uint32_t renewaltime, rebindingtime, leasetime;
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
 static int fflag;     /* run in foreground */
-
-static void
-setip(struct in_addr ip, struct in_addr mask)
-{
-	int fd = socket(PF_INET, SOCK_DGRAM, IPPROTO_IP);
-	if (fd == -1)
-		err(1, "can't set ip, socket:");
-
-	struct ifreq ifreq;
-	memset(&ifreq, 0, sizeof(ifreq));
-
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
-	((struct sockaddr_in *)&ifreq.ifr_addr)->sin_addr = ip;
-	ioctl(fd, SIOCSIFADDR, &ifreq);
-	((struct sockaddr_in *)&ifreq.ifr_addr)->sin_addr = mask;
-	ioctl(fd, SIOCSIFNETMASK, &ifreq);
-	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
-	ioctl(fd, SIOCSIFFLAGS, &ifreq);
-
-	close(fd);
-}
 
 static void
 cat(int dfd, char *src)

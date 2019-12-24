@@ -8,6 +8,7 @@
 size_t strlcpy(char *, const char *, size_t);
 
 extern int sock;
+extern const char *ifname;
 
 #define N_TIMERS 3
 extern int timers[];
@@ -20,6 +21,7 @@ ssize_t udpsend(void *data, size_t n, int broadcast);
 ssize_t udprecv(void *data, size_t n);
 void get_hw_addr(const char *ifname, unsigned char *hwaddr);
 void create_timers(int recreate);
+void setip(struct in_addr ip, struct in_addr mask);
 void setgw(struct in_addr gw);
 
 #ifdef __linux__
