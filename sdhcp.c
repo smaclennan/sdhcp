@@ -577,8 +577,7 @@ main(int argc, char *argv[])
 	 * For BSD we seem to need to set ip to 0.0.0.0.
 	 */
 	struct in_addr zero = { 0 };
-	struct in_addr mask = { .s_addr = htonl(0xff000000) };
-	setip(zero, mask);
+	setip(zero, zero);
 
 	if (cid_len == 0) {
 		cid[0] = 1;
