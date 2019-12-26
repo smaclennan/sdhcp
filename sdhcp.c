@@ -232,8 +232,7 @@ dhcpsend(int type, uint16_t broadcast)
 		break;
 	case DHCPrequest:
 		p = optput(p, ODipaddr, &client, sizeof(client));
-		if (broadcast == 0)
-			p = optput(p, ODserverid, &server, sizeof(server));
+		p = optput(p, ODserverid, &server, sizeof(server));
 		p = optput(p, ODparams, params, sizeof(params));
 		break;
 	case DHCPrelease:
@@ -567,17 +566,17 @@ main(int argc, char *argv[])
 		err(1, "gethostname:");
 	hostname_len = strlen(hostname);
 
-	open_socket(ifname);
-
-	unsigned char hwaddr[ETHER_ADDR_LEN];
-	get_hw_addr(ifname, hwaddr);
-	memcpy(&hwaddr64, hwaddr, sizeof(hwaddr));
-
 	/* Set interface up.
 	 * For BSD we seem to need to set ip to 0.0.0.0.
 	 */
 	struct in_addr zero = { 0 };
 	setip(zero, zero);
+
+	open_socket(ifname);
+
+	unsigned char hwaddr[ETHER_ADDR_LEN];
+	get_hw_addr(ifname, hwaddr);
+	memcpy(&hwaddr64, hwaddr, sizeof(hwaddr));
 
 	if (cid_len == 0) {
 		cid[0] = 1;
