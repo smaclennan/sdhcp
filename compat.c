@@ -39,11 +39,22 @@ setip(struct in_addr ip, struct in_addr mask)
 	memset(&ifreq, 0, sizeof(ifreq));
 
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+
+#ifdef SIOCAIFADDR
+	struct ifaliasreq areq;
+	memset(&areq, 0, sizeof(areq));
+
+	strlcpy(areq.ifra_name, ifname, IF_NAMESIZE);
+	iptoaddr(&areq.ifra_addr, ip, 0);
+	iptoaddr(&areq.ifra_mask, mask, 0);
+	ioctl(fd, SIOCAIFADDR, &areq);
+#else
 	// Linux only needs the sin_addr, but BSDish needs full sockaddr
 	iptoaddr(&ifreq.ifr_addr, ip, 0);
 	ioctl(fd, SIOCSIFADDR, &ifreq);
 	iptoaddr(&ifreq.ifr_addr, mask, 0);
 	ioctl(fd, SIOCSIFNETMASK, &ifreq);
+#endif
 	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
 	ioctl(fd, SIOCSIFFLAGS, &ifreq);
 
