@@ -45,6 +45,9 @@ setip(struct in_addr ip, struct in_addr mask)
 	memset(&areq, 0, sizeof(areq));
 
 	strlcpy(areq.ifra_name, ifname, IF_NAMESIZE);
+
+	ioctl(fd, SIOCDIFADDR, &areq);
+
 	iptoaddr(&areq.ifra_addr, ip, 0);
 	iptoaddr(&areq.ifra_mask, mask, 0);
 	ioctl(fd, SIOCAIFADDR, &areq);
