@@ -35,15 +35,11 @@ setip(struct in_addr ip, struct in_addr mask)
 	if (fd == -1)
 		err(1, "can't set ip, socket:");
 
-	struct ifreq ifreq;
-	memset(&ifreq, 0, sizeof(ifreq));
-
+	struct ifreq ifreq = { 0 };
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
 
 #ifdef SIOCAIFADDR
-	struct ifaliasreq areq;
-	memset(&areq, 0, sizeof(areq));
-
+	struct ifaliasreq areq = { 0 };
 	strlcpy(areq.ifra_name, ifname, IF_NAMESIZE);
 
 	ioctl(fd, SIOCDIFADDR, &areq);
@@ -401,34 +397,24 @@ udprecv(void *data, size_t n)
 
 static struct in_addr ip_zero;
 
-/* open a socket - ifreq will have ifname filled in */
-void
-open_socket(const char *ifname)
+void open_socket(const char *ifname)
 {
-	struct ifreq ifreq;
 	int set = 1;
 
-	if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1)
+	sock = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sock == -1)
 		err(1, "socket:");
 
 	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &set, sizeof(set)) == -1)
 		err(1, "SO_BROADCAST:");
 
-	memset(&ifreq, 0, sizeof(ifreq));
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
-
-#ifdef SIOCGIFINDEX
-	// SAM I am pretty sure this is not needed
-	if (ioctl(sock, SIOCGIFINDEX, &ifreq))
-		err(1, "SIOCGIFINDEX:");
-#endif
-
 #ifdef SO_BINDTODEVICE
+	struct ifreq ifreq = { 0 };
+	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
 	if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifreq, sizeof(ifreq)) == -1)
 		err(1, "SO_BINDTODEVICE:");
 #endif
 
-	/* needed */
 	struct sockaddr addr;
 	iptoaddr(&addr, ip_zero, 68);
 	if (bind(sock, (void*)&addr, sizeof(addr)) != 0)
