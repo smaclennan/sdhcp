@@ -5,6 +5,7 @@
 #include <net/route.h>
 #include <netinet/in.h>
 #include <netinet/if_ether.h>
+#include <arpa/inet.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
@@ -48,7 +49,7 @@ setip(struct in_addr ip, struct in_addr mask)
 	iptoaddr(&areq.ifra_addr, ip, 0);
 	iptoaddr(&areq.ifra_mask, mask, 0);
 	if (ioctl(fd, SIOCAIFADDR, &areq))
-		warn("SIOCAIFADDR %x", ip);
+		warn("SIOCAIFADDR %s", inet_ntoa(ip));
 #else
 	// Linux only needs the sin_addr, but BSDish needs full sockaddr
 	iptoaddr(&ifreq.ifr_addr, ip, 0);
