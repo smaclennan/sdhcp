@@ -473,9 +473,15 @@ setgw(struct in_addr gw)
 	if (fd == -1)
 		err(1, "can't set gw, socket:");
 
-	struct rtentry rtreq = { .rt_flags = RTF_UP | RTF_GATEWAY };
+	struct rtentry rtreq = {
+		.rt_flags = RTF_UP | RTF_GATEWAY,
+		.rt_dst.sa_family = AF_INET,
+		.rt_gateway.sa_family = AF_INET,
+		.rt_genmask.sa_family = AF_INET,
+	};
 	((struct sockaddr_in *)&rtreq.rt_gateway)->sin_addr = gw;
-	ioctl(fd, SIOCADDRT, &rtreq);
+	if (ioctl(fd, SIOCADDRT, &rtreq))
+		perror("set gw");
 
 	close(fd);
 }
