@@ -42,21 +42,25 @@ setip(struct in_addr ip, struct in_addr mask)
 	struct ifaliasreq areq = { 0 };
 	strlcpy(areq.ifra_name, ifname, IF_NAMESIZE);
 
-	ioctl(fd, SIOCDIFADDR, &areq);
+	if (ioctl(fd, SIOCDIFADDR, &areq))
+		warn("SIOCDIFADDR 0");
 
 	iptoaddr(&areq.ifra_addr, ip, 0);
 	iptoaddr(&areq.ifra_mask, mask, 0);
-	ioctl(fd, SIOCAIFADDR, &areq);
+	if (ioctl(fd, SIOCAIFADDR, &areq))
+		warn("SIOCAIFADDR %x", ip);
 #else
 	// Linux only needs the sin_addr, but BSDish needs full sockaddr
 	iptoaddr(&ifreq.ifr_addr, ip, 0);
-	ioctl(fd, SIOCSIFADDR, &ifreq);
+	if (ioctl(fd, SIOCSIFADDR, &ifreq))
+		warn("SIOCSIFADDR");
 	iptoaddr(&ifreq.ifr_addr, mask, 0);
-	ioctl(fd, SIOCSIFNETMASK, &ifreq);
+	if (ioctl(fd, SIOCSIFNETMASK, &ifreq))
+		warn("SIOCSIFNETMASK");
 #endif
 	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
-	ioctl(fd, SIOCSIFFLAGS, &ifreq);
-
+	if (ioctl(fd, SIOCSIFFLAGS, &ifreq))
+		warn("SIOCSIFFLAGS");
 	close(fd);
 }
 
@@ -481,7 +485,7 @@ setgw(struct in_addr gw)
 	};
 	((struct sockaddr_in *)&rtreq.rt_gateway)->sin_addr = gw;
 	if (ioctl(fd, SIOCADDRT, &rtreq))
-		perror("set gw");
+		warn("SIOCADDRT");
 
 	close(fd);
 }
