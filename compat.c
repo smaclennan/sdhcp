@@ -333,7 +333,7 @@ udpsend(void *data, size_t n, int broadcast)
 	pkt.iphdr.ip_off = htons(0x4000); /* DF set */
 	pkt.iphdr.ip_ttl = 16;
 	pkt.iphdr.ip_p = IPPROTO_UDP;
-	pkt.iphdr.ip_src = client;
+	// pkt.iphdr.ip_src always 0
 	pkt.iphdr.ip_sum = chksum16(&pkt.iphdr, 20);
 
 	pkt.udphdr.uh_sport = htons(68);
