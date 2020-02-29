@@ -1,0 +1,13 @@
+#!/bin/sh
+
+echo "`date` $STATE $IFNAME"  >> /tmp/sdhcp.log
+
+# dnsmasq expects this
+RESOLV=/run/dnsmasq/resolv.conf
+
+if [ -n "$DNS" ]; then
+	echo "nameserver $DNS" > $RESOLV
+	[ -n "$DNS2" ] && echo "nameserver $DNS2" >> $RESOLV
+	[ -n "$DOMAIN" ] && echo "search $DOMAIN" >> $RESOLV
+	pkill -HUP dnsmasq
+fi

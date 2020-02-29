@@ -1,0 +1,14 @@
+#!/bin/sh
+
+TMP=/tmp/NETWORKING
+echo $0 $* >> $TMP
+
+# The last arg should be the interface
+for arg; do :; done
+if [ $arg = eth0 ]; then
+	pkill sdhcp
+	exit 0
+fi
+
+echo $0 UBUNTU >> $TMP # SAM DBG
+/sbin/ifdown $*
