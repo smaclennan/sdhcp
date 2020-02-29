@@ -55,9 +55,11 @@ setip(struct in_addr ip, struct in_addr mask)
 	iptoaddr(&ifreq.ifr_addr, ip, 0);
 	if (ioctl(fd, SIOCSIFADDR, &ifreq))
 		warn("SIOCSIFADDR");
-	iptoaddr(&ifreq.ifr_addr, mask, 0);
-	if (ioctl(fd, SIOCSIFNETMASK, &ifreq))
-		warn("SIOCSIFNETMASK");
+	if (mask.s_addr) {
+		iptoaddr(&ifreq.ifr_addr, mask, 0);
+		if (ioctl(fd, SIOCSIFNETMASK, &ifreq))
+			warn("SIOCSIFNETMASK");
+	}
 #endif
 	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
 	if (ioctl(fd, SIOCSIFFLAGS, &ifreq))
