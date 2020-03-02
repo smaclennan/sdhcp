@@ -317,26 +317,31 @@ callout(const char *state)
 }
 
 static void
-settimeout(int n, const struct itimerspec *ts)
+settimeout(int n, uint32_t seconds)
 {
-	if (timerfd_settime(timers[n], 0, ts, NULL) < 0)
+	const struct itimerspec ts = { .it_value.tv_sec = seconds };
+	if (timerfd_settime(timers[n], 0, &ts, NULL) < 0)
 		err(1, "timerfd_settime:");
 }
 
-/* sets ts to expire halfway to the expiration of timer n, minimum of 60 seconds */
+/* sets timer t to expire halfway to the expiration of timer n, minimum of 60 seconds */
 static void
-calctimeout(int n, struct itimerspec *ts)
+calctimeout(int n, int t)
 {
-	if (timerfd_gettime(timers[n], ts) < 0)
+	struct itimerspec ts;
+
+	if (timerfd_gettime(timers[n], &ts) < 0)
 		err(1, "timerfd_gettime:");
-	ts->it_value.tv_nsec /= 2;
-	if (ts->it_value.tv_sec % 2)
-		ts->it_value.tv_nsec += 500000000;
-	ts->it_value.tv_sec /= 2;
-	if (ts->it_value.tv_sec < 60) {
-		ts->it_value.tv_sec = 60;
-		ts->it_value.tv_nsec = 0;
+	ts.it_value.tv_nsec /= 2;
+	if (ts.it_value.tv_sec % 2)
+		ts.it_value.tv_nsec += 500000000;
+	ts.it_value.tv_sec /= 2;
+	if (ts.it_value.tv_sec < 60) {
+		ts.it_value.tv_sec = 60;
+		ts.it_value.tv_nsec = 0;
 	}
+	if (timerfd_settime(timers[t], 0, &ts, NULL) < 0)
+		err(1, "timerfd_settime:");
 }
 
 static void parse_reply(void)
@@ -357,8 +362,8 @@ static void parse_reply(void)
 static void
 run(int fast_start)
 {
-	int forked = 0, t;
-	struct itimerspec timeout = { { 0, 0 }, { 0, 0 } };
+	int forked = 0;
+	uint32_t t;
 
 	if (fast_start)
 		goto Requesting;
@@ -366,8 +371,7 @@ run(int fast_start)
 Init:
 	client.s_addr = 0;
 	dhcpsend(DHCPdiscover, BROADCAST);
-	timeout.it_value.tv_sec = 1;
-	settimeout(0, &timeout);
+	settimeout(0, 1);
 	goto Selecting;
 Selecting:
 	for (;;) {
@@ -383,8 +387,7 @@ Selecting:
 Requesting:
 	for (t = 4; t <= 64; t *= 2) {
 		dhcpsend(DHCPrequest, BROADCAST);
-		timeout.it_value.tv_sec = t;
-		settimeout(0, &timeout);
+		settimeout(0, t);
 		for (;;) {
 			switch (dhcprecv()) {
 			case DHCPack:
@@ -424,12 +427,9 @@ Bound:
 	callout("BOUND");
 
 Renewed:
-	timeout.it_value.tv_sec = renewaltime;
-	settimeout(0, &timeout);
-	timeout.it_value.tv_sec = rebindingtime;
-	settimeout(1, &timeout);
-	timeout.it_value.tv_sec = leasetime;
-	settimeout(2, &timeout);
+	settimeout(0, renewaltime);
+	settimeout(1, rebindingtime);
+	settimeout(2, leasetime);
 	for (;;) {
 		switch (dhcprecv()) {
 		case Timeout0: /* t1 elapsed */
@@ -442,8 +442,7 @@ Renewed:
 	}
 Renewing:
 	dhcpsend(DHCPrequest, 0);
-	calctimeout(1, &timeout);
-	settimeout(0, &timeout);
+	calctimeout(1, 0);
 	for (;;) {
 		switch (dhcprecv()) {
 		case DHCPack:
@@ -460,8 +459,7 @@ Renewing:
 		}
 	}
 Rebinding:
-	calctimeout(2, &timeout);
-	settimeout(0, &timeout);
+	calctimeout(2, 0);
 	dhcpsend(DHCPrequest, BROADCAST);
 	for (;;) {
 		switch (dhcprecv()) {
