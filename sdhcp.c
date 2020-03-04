@@ -357,6 +357,12 @@ static void parse_reply(void)
 	renewaltime = ntohl(renewaltime);
 	rebindingtime = ntohl(rebindingtime);
 	leasetime = ntohl(leasetime);
+
+	/* renew and rebind times are optional */
+	if (renewaltime == 0 || rebindingtime == 0) {
+		renewaltime = leasetime / 2;
+		rebindingtime = leasetime * 7 / 8;
+	}
 }
 
 static void
