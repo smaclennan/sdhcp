@@ -344,7 +344,8 @@ calctimeout(int n, int t)
 		err(1, "timerfd_settime:");
 }
 
-static void parse_reply(void)
+static void
+parse_reply(void)
 {
 	optget(&bp, &mask, OBmask, sizeof(mask));
 	optget(&bp, &router, OBrouter, sizeof(router));
@@ -495,7 +496,8 @@ usage(int rc)
 		 "\t[ifname] [clientid]");
 }
 
-static uint8_t fromhex(char nibble)
+static uint8_t
+fromhex(char nibble)
 {
 	if (nibble >= '0' && nibble <= '9')
 		return nibble - '0';
@@ -508,7 +510,8 @@ static uint8_t fromhex(char nibble)
 	return 0; // unreachable
 }
 
-static int str2bytes(const char *str, uint8_t *bytes, int len)
+static int
+str2bytes(const char *str, uint8_t *bytes, int len)
 {
 	int slen = strlen(str);
 	if ((slen & 1) || slen > (len * 2))
