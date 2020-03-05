@@ -352,18 +352,14 @@ parse_reply(void)
 	optget(&bp, &dns, OBdnsserver, sizeof(dns));
 	optget(&bp, &ntp, OBntp, sizeof(ntp));
 	optget(&bp, domainname, OBdomainname, sizeof(domainname));
-	optget(&bp, &renewaltime, ODrenewaltime, sizeof(renewaltime));
-	optget(&bp, &rebindingtime, ODrebindingtime, sizeof(rebindingtime));
 	optget(&bp, &leasetime, ODlease, sizeof(leasetime));
-	renewaltime = ntohl(renewaltime);
-	rebindingtime = ntohl(rebindingtime);
 	leasetime = ntohl(leasetime);
 
-	/* renew and rebind times are optional */
-	if (renewaltime == 0 || rebindingtime == 0) {
-		renewaltime = leasetime / 2;
-		rebindingtime = leasetime * 7 / 8;
-	}
+	/* Renew and rebind times are optional. It is faster to just
+	 * calculate the times. Assumes: lease > 4s and < ~20 years.
+	 */
+	renewaltime   = leasetime / 2;
+	rebindingtime = leasetime * 7 / 8;
 }
 
 static void
