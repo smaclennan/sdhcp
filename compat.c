@@ -255,7 +255,8 @@ static struct pseudohdr
 	unsigned char bootp[BOOTP_SIZE];
 } __attribute__((packed)) pseudohdr;
 
-static unsigned char server_mac[ETHER_ADDR_LEN];
+static struct in_addr dst_addr;
+static unsigned char dst_mac[ETHER_ADDR_LEN];
 static unsigned int ifindex;
 
 /* RFC 1071. */
@@ -320,8 +321,8 @@ udpsend(void *data, size_t n, int broadcast)
 		memset(pkt.ethhdr.ether_dhost, 0xff, ETHER_ADDR_LEN);
 		pkt.iphdr.ip_dst.s_addr = INADDR_BROADCAST;
 	} else {
-		memcpy(&pkt.ethhdr.ether_dhost, server_mac, ETHER_ADDR_LEN);
-		pkt.iphdr.ip_dst = server;
+		memcpy(&pkt.ethhdr.ether_dhost, dst_mac, ETHER_ADDR_LEN);
+		pkt.iphdr.ip_dst = dst_addr;
 		pkt.iphdr.ip_src = client;
 	}
 
@@ -394,7 +395,8 @@ udprecv(void *data, size_t n)
 	if (memcmp(recv.bootp + 7, hwaddr, ETHER_ADDR_LEN))
 		return -1; /* not our mac */
 
-	memcpy(server_mac, &recv.ethhdr.ether_shost, ETHER_ADDR_LEN);
+	dst_addr = recv.iphdr.ip_src;
+	memcpy(dst_mac, &recv.ethhdr.ether_shost, ETHER_ADDR_LEN);
 	memcpy(data, &recv.bootp, r);
 
 	return r;
@@ -402,6 +404,7 @@ udprecv(void *data, size_t n)
 
 #else
 
+static struct in_addr dst_addr;
 static struct in_addr ip_zero;
 
 void open_socket(const char *ifname)
@@ -443,7 +446,7 @@ udpsend(void *data, size_t n, int broadcast)
 		ip.s_addr = INADDR_BROADCAST;
 		flags |= MSG_DONTROUTE;
 	} else
-		ip = server;
+		ip = dst_addr;
 
 	iptoaddr(&addr, ip, 67); /* bootp server */
 	while ((sent = sendto(sock, data, n, flags, &addr, sizeof(addr))) == -1)
@@ -457,15 +460,19 @@ udpsend(void *data, size_t n, int broadcast)
 ssize_t
 udprecv(void *data, size_t n)
 {
+	struct sockaddr addr;
+	socklen_t len = sizeof(addr);
 	ssize_t r;
 
-	while ((r = recv(sock, data, n, 0)) == -1)
+	while ((r = recvfrom(sock, data, n, 0, &addr, &len)) == -1)
 		if (errno != EINTR)
 			err(1, "recvfrom:");
 
 	unsigned *bp = data;
 	if (memcmp(bp + 7, hwaddr, ETHER_ADDR_LEN))
 		return -1; /* not our mac */
+
+	dst_addr = ((struct sockadddr_in *)addr).sin_addr;
 
 	return r;
 }

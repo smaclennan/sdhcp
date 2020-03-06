@@ -132,6 +132,7 @@ static uint32_t renewaltime, rebindingtime, leasetime;
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
 static int fflag;     /* run in foreground */
+static int always_broadcast;
 
 static void
 cat(int dfd, char *src)
@@ -243,6 +244,8 @@ dhcpsend(int type, uint16_t broadcast)
 	}
 	*p++ = OBend;
 
+	if (always_broadcast)
+		broadcast = BROADCAST;
 	udpsend(&bootp, p - (uint8_t *)&bootp, broadcast);
 }
 
@@ -299,7 +302,6 @@ callout(const char *state)
 	setenv("SPID", buf, 1);
 	snprintf(buf, sizeof(buf), "%u", leasetime);
 	setenv("LEASE", buf, 1);
-	setenv("SERVER", inet_ntoa(server), 1);
 	setenv("CLIENT", inet_ntoa(client), 1);
 	setenv("MASK",   inet_ntoa(mask), 1);
 	setenv("ROUTER", inet_ntoa(router), 1);
@@ -526,7 +528,7 @@ main(int argc, char *argv[])
 {
 	int c, fast_start = 0;
 
-	while ((c = getopt(argc, argv, "c:de:fhir:")) != EOF)
+	while ((c = getopt(argc, argv, "c:de:fhir:B")) != EOF)
 		switch (c) {
 		case 'c': // client IP
 			if (inet_aton(optarg, &client) == 0)
@@ -549,6 +551,9 @@ main(int argc, char *argv[])
 			break;
 		case 'r': /* resolv.conf filename */
 			resolvconf = optarg;
+			break;
+		case 'B':
+			always_broadcast = 1;
 			break;
 		default:
 			usage(1);
