@@ -472,7 +472,7 @@ udprecv(void *data, size_t n)
 	if (memcmp(bp + 7, hwaddr, ETHER_ADDR_LEN))
 		return -1; /* not our mac */
 
-	dst_addr = ((struct sockadddr_in *)addr).sin_addr;
+	dst_addr = ((struct sockaddr_in *)&addr)->sin_addr;
 
 	return r;
 }
