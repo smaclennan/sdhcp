@@ -123,7 +123,6 @@ static int cid_len;
 static char *program;
 int timers[N_TIMERS];
 /* sav */
-// SAM struct in_addr server;
 struct in_addr client;
 static struct in_addr mask;
 static struct in_addr router;
@@ -236,13 +235,11 @@ dhcpsend(int type, uint16_t broadcast)
 		break;
 	case DHCPrequest:
 		p = optput(p, ODipaddr, &client, sizeof(client));
-// SAM		p = optput(p, ODserverid, &server, sizeof(server));
 		p = optput(p, ODparams, params, sizeof(params));
 		break;
 	case DHCPrelease:
 		bootp.ciaddr = client;
 		p = optput(p, ODipaddr, &client, sizeof(client));
-// SAM		p = optput(p, ODserverid, &server, sizeof(server));
 		break;
 	}
 	*p++ = OBend;
@@ -386,7 +383,6 @@ Selecting:
 		switch (dhcprecv()) {
 		case DHCPoffer:
 			client = bp.yiaddr;
-// SAM			optget(&bp, &server, ODserverid, sizeof(server));
 			goto Requesting;
 		case Timeout0:
 			goto Init;
