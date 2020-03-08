@@ -576,8 +576,10 @@ main(int argc, char *argv[])
 	/* Set interface up.
 	 * For BSD we seem to need to set ip to 0.0.0.0.
 	 */
-	struct in_addr zero = { 0 };
-	setip(zero, zero);
+	if (iflag) {
+		struct in_addr zero = { 0 };
+		setip(zero, zero);
+	}
 
 	open_socket(ifname);
 
