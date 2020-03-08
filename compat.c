@@ -39,18 +39,6 @@ setip(struct in_addr ip, struct in_addr mask)
 	struct ifreq ifreq = { 0 };
 	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
 
-#ifdef SIOCAIFADDR
-	struct ifaliasreq areq = { 0 };
-	strlcpy(areq.ifra_name, ifname, IF_NAMESIZE);
-
-	if (ioctl(fd, SIOCDIFADDR, &areq))
-		warn("SIOCDIFADDR 0");
-
-	iptoaddr(&areq.ifra_addr, ip, 0);
-	iptoaddr(&areq.ifra_mask, mask, 0);
-	if (ioctl(fd, SIOCAIFADDR, &areq))
-		warn("SIOCAIFADDR %s", inet_ntoa(ip));
-#else
 	// Linux only needs the sin_addr, but BSDish needs full sockaddr
 	iptoaddr(&ifreq.ifr_addr, ip, 0);
 	if (ioctl(fd, SIOCSIFADDR, &ifreq))
@@ -60,10 +48,11 @@ setip(struct in_addr ip, struct in_addr mask)
 		if (ioctl(fd, SIOCSIFNETMASK, &ifreq))
 			warn("SIOCSIFNETMASK");
 	}
-#endif
+
 	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
 	if (ioctl(fd, SIOCSIFFLAGS, &ifreq))
 		warn("SIOCSIFFLAGS");
+
 	close(fd);
 }
 
