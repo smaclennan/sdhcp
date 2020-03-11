@@ -8,6 +8,6 @@ This version has several changes:
 
 * raw socket implementation for Linux
 * expanded callback (more environment variables)
-* support for DUID client id.
+* support for DUID client id
 * support for more servers
 * provided sdhcp-script for debugging
