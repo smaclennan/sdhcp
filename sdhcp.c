@@ -452,6 +452,7 @@ Renewing:
 		case DHCPack:
 			parse_reply();
 			callout("RENEW");
+			close_socket(); /* currently raw sockets only */
 			goto Renewed;
 		case Timeout0: /* resend request */
 			goto Renewing;

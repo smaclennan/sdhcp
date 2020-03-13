@@ -294,8 +294,10 @@ open_socket(const char *ifname)
 void
 close_socket(void)
 {	/* We close the socket for performance reasons */
-	close(sock);
-	sock = -1;
+	if (sock != -1) {
+		close(sock);
+		sock = -1;
+	}
 }
 
 ssize_t
