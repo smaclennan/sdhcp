@@ -375,10 +375,17 @@ udprecv(void *data, size_t n)
 		if (errno != EINTR)
 			err(1, "read");
 
+	if (ntohs(recv.ethhdr.ether_type) != ETHERTYPE_IP)
+		return -1; // not an IP packet
+
+	if (recv.udphdr.uh_sport != htons(67) || recv.udphdr.uh_dport != htons(68))
+		return -1; /* not a dhcp packet */
+
 	r -= sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
 	if (r < 236)
 		return -1; /* too small to be a dhcp packet */
-	if (r > (int)n) r = n;
+	if (r > (int)n)
+		r = n;
 
 	if (recv.udphdr.uh_sport != htons(67) || recv.udphdr.uh_dport != htons(68))
 		return -1; /* not a dhcp packet */
