@@ -25,7 +25,7 @@ iptoaddr(struct sockaddr *ifaddr, struct in_addr ip, int port)
 	in->sin_len = sizeof(struct sockaddr_in);
 #endif
 	in->sin_family = AF_INET;
-	in->sin_port = htons(port);
+	in->sin_port = port;
 	in->sin_addr = ip;
 }
 
@@ -234,6 +234,14 @@ timerfd_settime(int fd, int flags,
 #include <netinet/udp.h>
 #include <linux/if_packet.h>
 
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define PORT67	0x4300
+#define PORT68	0x4400
+#else
+#define PORT67	67
+#define PORT68	68
+#endif
+
 /* Fixed bootp header + 312 for optional */
 #define BOOTP_SIZE (236 + 312)
 
@@ -342,8 +350,8 @@ udpsend(void *data, size_t n, int broadcast)
 	pkt.iphdr.ip_p = IPPROTO_UDP;
 	pkt.iphdr.ip_sum = chksum16(&pkt.iphdr, 20);
 
-	pkt.udphdr.uh_sport = htons(68);
-	pkt.udphdr.uh_dport = htons(67);
+	pkt.udphdr.uh_sport = PORT68;
+	pkt.udphdr.uh_dport = PORT67;
 	pkt.udphdr.uh_ulen = htons(sizeof(struct udphdr) + n);
 
 	memcpy(&pkt.bootp, data, n);
@@ -390,7 +398,7 @@ udprecv(void *data, size_t n)
 	if (ntohs(recv.ethhdr.ether_type) != ETHERTYPE_IP)
 		return -1; // not an IP packet
 
-	if (recv.udphdr.uh_sport != htons(67) || recv.udphdr.uh_dport != htons(68))
+	if (recv.udphdr.uh_sport != PORT67 || recv.udphdr.uh_dport != PORT68)
 		return -1; /* not a dhcp packet */
 
 	r -= sizeof(struct ether_header) + sizeof(struct ip) + sizeof(struct udphdr);
@@ -398,9 +406,6 @@ udprecv(void *data, size_t n)
 		return -1; /* too small to be a dhcp packet */
 	if (r > (int)n)
 		r = n;
-
-	if (recv.udphdr.uh_sport != htons(67) || recv.udphdr.uh_dport != htons(68))
-		return -1; /* not a dhcp packet */
 
 	if (memcmp(recv.bootp + 7, hwaddr, ETHER_ADDR_LEN))
 		return -1; /* not our mac */
@@ -436,7 +441,7 @@ void open_socket(const char *ifname)
 #endif
 
 	struct sockaddr addr;
-	iptoaddr(&addr, ip_zero, 68);
+	iptoaddr(&addr, ip_zero, PORT68);
 	if (bind(sock, (void*)&addr, sizeof(addr)) != 0)
 		err(1, "bind:");
 }
