@@ -124,6 +124,7 @@ static char *program;
 int timers[N_TIMERS];
 /* sav */
 struct in_addr client;
+struct in_addr server;
 static struct in_addr mask;
 static struct in_addr router;
 static struct in_addr dns[2];
@@ -235,11 +236,13 @@ dhcpsend(int type, uint16_t broadcast)
 		break;
 	case DHCPrequest:
 		p = optput(p, ODipaddr, &client, sizeof(client));
+		p = optput(p, ODserverid, &server, sizeof(server));
 		p = optput(p, ODparams, params, sizeof(params));
 		break;
 	case DHCPrelease:
 		bootp.ciaddr = client;
 		p = optput(p, ODipaddr, &client, sizeof(client));
+		p = optput(p, ODserverid, &server, sizeof(server));
 		break;
 	}
 	*p++ = OBend;
@@ -302,6 +305,7 @@ callout(const char *state)
 	setenv("SPID", buf, 1);
 	snprintf(buf, sizeof(buf), "%u", leasetime);
 	setenv("LEASE", buf, 1);
+	setenv("SERVER", inet_ntoa(server), 1);
 	setenv("CLIENT", inet_ntoa(client), 1);
 	setenv("MASK",   inet_ntoa(mask), 1);
 	setenv("ROUTER", inet_ntoa(router), 1);
@@ -375,6 +379,7 @@ run(int fast_start)
 
 Init:
 	client.s_addr = 0;
+	server.s_addr = 0;
 	dhcpsend(DHCPdiscover, BROADCAST);
 	settimeout(0, 1);
 	goto Selecting;
@@ -383,6 +388,7 @@ Selecting:
 		switch (dhcprecv()) {
 		case DHCPoffer:
 			client = bp.yiaddr;
+			optget(&bp, &server, ODserverid, sizeof(server));
 			goto Requesting;
 		case Timeout0:
 			goto Init;

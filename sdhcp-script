@@ -8,6 +8,7 @@ echo "Ifname $IFNAME" >> $LOG
 echo "SPID   $SPID"   >> $LOG
 echo "Lease  $LEASE"  >> $LOG
 echo "Client $CLIENT" >> $LOG
+echo "Server $SERVER" >> $LOG
 echo "Router $ROUTER" >> $LOG
 echo "Mask   $MASK"   >> $LOG
 echo "Domain $DOMAIN" >> $LOG
