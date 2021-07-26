@@ -234,14 +234,6 @@ timerfd_settime(int fd, int flags,
 #include <netinet/udp.h>
 #include <linux/if_packet.h>
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-#define PORT67	0x4300
-#define PORT68	0x4400
-#else
-#define PORT67	67
-#define PORT68	68
-#endif
-
 /* Fixed bootp header + 312 for optional */
 #define BOOTP_SIZE (236 + 312)
 

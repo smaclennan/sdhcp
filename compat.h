@@ -4,6 +4,14 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define LEN(a) (sizeof(a) / sizeof((a)[0]))
 
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+#define PORT67	0x4300
+#define PORT68	0x4400
+#else
+#define PORT67	67
+#define PORT68	68
+#endif
+
 #undef strlcpy
 size_t strlcpy(char *, const char *, size_t);
 
