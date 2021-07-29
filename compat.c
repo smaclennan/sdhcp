@@ -455,7 +455,7 @@ udpsend(void *data, size_t n, int broadcast)
 	} else
 		ip = dst_addr;
 
-	iptoaddr(&addr, ip, 67); /* bootp server */
+	iptoaddr(&addr, ip, PORT67); /* bootp server */
 	while ((sent = sendto(sock, data, n, flags, &addr, sizeof(addr))) == -1)
 		if (errno != EINTR)
 			err(1, "sendto:");
