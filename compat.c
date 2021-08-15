@@ -405,7 +405,7 @@ void open_socket(const char *ifname)
 
 #ifdef SO_BINDTODEVICE
 	struct ifreq ifreq = { 0 };
-	strcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+	strcpy(ifreq.ifr_name, ifname);
 	if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifreq, sizeof(ifreq)) == -1)
 		err(1, "SO_BINDTODEVICE:");
 #endif
