@@ -37,11 +37,11 @@ setip(struct in_addr ip, struct in_addr mask)
 		err(1, "can't set ip, socket:");
 
 	struct ifreq ifreq = { 0 };
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+	strcpy(ifreq.ifr_name, ifname);
 
 #ifdef SIOCAIFADDR
 	struct ifaliasreq areq = { 0 };
-	strlcpy(areq.ifra_name, ifname, IF_NAMESIZE);
+	strcpy(areq.ifra_name, ifname);
 
 	if (ioctl(fd, SIOCDIFADDR, &areq))
 		warn("SIOCDIFADDR 0");
@@ -61,7 +61,7 @@ setip(struct in_addr ip, struct in_addr mask)
 			warn("SIOCSIFNETMASK");
 	}
 #endif
-	ifreq.ifr_flags = IFF_UP | IFF_RUNNING | IFF_BROADCAST | IFF_MULTICAST;
+	ifreq.ifr_flags = IFF_UP;
 	if (ioctl(fd, SIOCSIFFLAGS, &ifreq))
 		warn("SIOCSIFFLAGS");
 
@@ -76,7 +76,7 @@ get_hw_addr(const char *ifname, unsigned char *hwaddr_in)
 	struct ifreq ifreq;
 
 	memset(&ifreq, 0, sizeof(ifreq));
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+	strcpy(ifreq.ifr_name, ifname);
 	if (ioctl(sock, SIOCGIFHWADDR, &ifreq))
 		err(1, "SIOCGIFHWADDR");
 
@@ -93,28 +93,6 @@ create_timers(int recreate)
 			if (timers[i] == -1)
 				err(1, "timerfd_create:");
 		}
-}
-
-/*
- * Copy src to string dst of size siz.  At most siz-1 characters
- * will be copied.  Always NUL terminates (unless siz == 0).
- * Returns strlen(src); if retval >= siz, truncation occurred.
- */
-size_t
-strlcpy(char *dst, const char *src, size_t dstlen)
-{
-	size_t srclen = strlen(src);
-
-	if (dstlen > 0) {
-		if (dstlen > srclen)
-			strcpy(dst, src);
-		else {
-			strncpy(dst, src, dstlen - 1);
-			dst[dstlen - 1] = 0;
-		}
-	}
-
-	return srclen;
 }
 
 #else
@@ -296,7 +274,7 @@ open_socket(const char *ifname)
 
 	struct ifreq ifreq;
 	memset(&ifreq, 0, sizeof(ifreq));
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+	strcpy(ifreq.ifr_name, ifname);
 
 	if (ioctl(sock, SIOCGIFINDEX, &ifreq))
 		err(1, "SIOCGIFINDEX");
@@ -427,7 +405,7 @@ void open_socket(const char *ifname)
 
 #ifdef SO_BINDTODEVICE
 	struct ifreq ifreq = { 0 };
-	strlcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
+	strcpy(ifreq.ifr_name, ifname, IF_NAMESIZE);
 	if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifreq, sizeof(ifreq)) == -1)
 		err(1, "SO_BINDTODEVICE:");
 #endif

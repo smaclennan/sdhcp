@@ -12,9 +12,6 @@
 #define PORT68	68
 #endif
 
-#undef strlcpy
-size_t strlcpy(char *, const char *, size_t);
-
 extern int sock;
 extern const char *ifname;
 

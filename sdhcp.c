@@ -565,8 +565,16 @@ main(int argc, char *argv[])
 			usage(1);
 		}
 
-	if (optind < argc)
+	if (optind < argc) {
 		ifname = argv[optind++]; /* interface name */
+		/* If we verify here, we can use strcpy() rather than the more
+		 * expensive, and less portable,  strlcpy().
+		 */
+		if (strlen(ifname) >= IF_NAMESIZE) {
+			fprintf(stderr, "Interface %s too big\n", ifname);
+			exit(1);
+		}
+	}
 	if (optind < argc) {  /* client-id */
 		char *id = argv[optind];
 		if (*id == '0' && *(id + 1) == 'x')
