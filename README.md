@@ -2,7 +2,7 @@
 
 This is a fork of the suckless.org dhcp client.
 
-    https://core.suckless.org/sdhcp/
+https://core.suckless.org/sdhcp/
 
 This version has several changes:
 
