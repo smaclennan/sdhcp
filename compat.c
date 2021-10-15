@@ -39,7 +39,7 @@ setip(struct in_addr ip, struct in_addr mask)
 	struct ifreq ifreq = { 0 };
 	strcpy(ifreq.ifr_name, ifname);
 
-#ifdef SIOCAIFADDR
+#if defined(SIOCAIFADDR) && !defined(__QNX__)
 	struct ifaliasreq areq = { 0 };
 	strcpy(areq.ifra_name, ifname);
 
@@ -408,6 +408,9 @@ void open_socket(const char *ifname)
 	strcpy(ifreq.ifr_name, ifname);
 	if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifreq, sizeof(ifreq)) == -1)
 		err(1, "SO_BINDTODEVICE:");
+#else
+#warning SO_BINDTODEVICE not set
+	(void)ifname;
 #endif
 
 	struct sockaddr addr;

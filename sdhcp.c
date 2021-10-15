@@ -26,11 +26,6 @@
  */
 #define XID 0x21433412
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-#define MAGIC 0x63538263
-#else
-#define MAGIC 0x63825363
-#endif
 #define BROADCAST (1 << 7)
 
 struct bootp {

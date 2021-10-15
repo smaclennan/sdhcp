@@ -4,12 +4,23 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define LEN(a) (sizeof(a) / sizeof((a)[0]))
 
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#if (defined(__BYTE_ORDER) && __BYTE_ORDER == __LITTLE_ENDIAN) \
+	|| defined(__LITTLE_ENDIAN__)
 #define PORT67	0x4300
 #define PORT68	0x4400
+#define MAGIC 0x63538263
 #else
+#if (defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN) \
+	|| defined(__BIG_ENDIAN__)
 #define PORT67	67
 #define PORT68	68
+#define MAGIC 0x63825363
+#else
+#warning Could not work out endian
+#define PORT67 htons(67)
+#define PORT68 htons(68)
+#define MAGIC  ntohl(0x63825363)
+#endif
 #endif
 
 extern int sock;
