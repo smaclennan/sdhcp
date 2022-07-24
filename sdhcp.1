@@ -10,6 +10,7 @@
 .Op Fl d
 .Op Fl e Ar program
 .Op Fl f
+.Op Fl g
 .Op Fl i
 .Op Fl r Ar resolv.conf file
 .Op Ar interface
@@ -47,7 +48,9 @@ Variables will be set, see VARIABLES.
 .It Fl f
 run in foreground.
 .It Fl i
-don't change interface information such as an IP address.
+don't change interface information such as an IP address and GW.
+.It Fl g
+don't change GW
 .It Fl r Ar resolv.conf file
 alternate /etc/resolv.conf location
 .El

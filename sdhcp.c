@@ -129,6 +129,7 @@ static uint32_t renewaltime, rebindingtime, leasetime;
 
 static int dflag = 1; /* change DNS in /etc/resolv.conf ? */
 static int iflag = 1; /* set IP ? */
+static int gflag = 1; /* set GW ? */
 static int fflag;     /* run in foreground */
 static int always_broadcast;
 
@@ -415,12 +416,13 @@ Bound:
 	parse_reply();
 	if (iflag) {
 		setip(client, mask);
-		setgw(router);
+		if (gflag)
+			setgw(router);
 	}
 	setdns(dns);
 
 	if (!forked)
-		fputs("Congrats! You should be on the 'net.\n", stdout);
+		write(1, "Congrats! You should be on the 'net.\n", 37);
 	if (!fflag && !forked) {
 		if (fork())
 			exit(0);
@@ -529,7 +531,7 @@ main(int argc, char *argv[])
 {
 	int c, fast_start = 0;
 
-	while ((c = getopt(argc, argv, "c:de:fhir:B")) != EOF)
+	while ((c = getopt(argc, argv, "c:de:fghir:B")) != EOF)
 		switch (c) {
 		case 'c': // client IP
 			if (inet_aton(optarg, &client) == 0)
@@ -544,6 +546,9 @@ main(int argc, char *argv[])
 			break;
 		case 'f': /* run in foreground */
 			fflag = 1;
+			break;
+		case 'g': /* don't set gw */
+			gflag = 0;
 			break;
 		case 'h':
 			usage(0);
