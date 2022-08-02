@@ -5,7 +5,7 @@
 #define LEN(a) (sizeof(a) / sizeof((a)[0]))
 
 #if (defined(__BYTE_ORDER) && __BYTE_ORDER == __LITTLE_ENDIAN) \
-	|| defined(__LITTLE_ENDIAN__)
+	|| defined(__LITTLE_ENDIAN__) || defined(__LITTLEENDIAN__)
 #define PORT67	0x4300
 #define PORT68	0x4400
 #define MAGIC 0x63538263

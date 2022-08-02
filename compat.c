@@ -14,6 +14,14 @@
 
 #include "compat.h"
 
+#ifdef __QNX__
+#include <sys/nto_version.h>
+#if _NTO_VERSION < 720
+// io-pkt does not support SIOCAIFADDR properly
+#undef SIOCAIFADDR
+#endif
+#endif
+
 static uint8_t hwaddr[ETHER_ADDR_LEN];
 
 static void
@@ -39,7 +47,7 @@ setip(struct in_addr ip, struct in_addr mask)
 	struct ifreq ifreq = { 0 };
 	strcpy(ifreq.ifr_name, ifname);
 
-#if defined(SIOCAIFADDR) && !defined(__QNX__)
+#ifdef SIOCAIFADDR
 	struct ifaliasreq areq = { 0 };
 	strcpy(areq.ifra_name, ifname);
 
@@ -438,8 +446,10 @@ udpsend(void *data, size_t n, int broadcast)
 
 	iptoaddr(&addr, ip, PORT67); /* bootp server */
 	while ((sent = sendto(sock, data, n, flags, &addr, sizeof(addr))) == -1)
-		if (errno != EINTR)
-			err(1, "sendto:");
+		if (errno != EINTR) {
+			warn("sendto:");
+			break;
+		}
 
 	return sent;
 }
