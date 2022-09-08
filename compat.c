@@ -416,9 +416,6 @@ void open_socket(const char *ifname)
 	strcpy(ifreq.ifr_name, ifname);
 	if (setsockopt(sock, SOL_SOCKET, SO_BINDTODEVICE, &ifreq, sizeof(ifreq)) == -1)
 		err(1, "SO_BINDTODEVICE:");
-#else
-#warning SO_BINDTODEVICE not set
-	(void)ifname;
 #endif
 
 	struct sockaddr addr;
