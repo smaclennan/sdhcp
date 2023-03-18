@@ -51,8 +51,11 @@ setip(struct in_addr ip, struct in_addr mask)
 	struct ifaliasreq areq = { 0 };
 	strcpy(areq.ifra_name, ifname);
 
+	static int first_time = 1;
 	if (ioctl(fd, SIOCDIFADDR, &areq))
-		warn("SIOCDIFADDR 0");
+		if (!first_time)
+			warn("SIOCDIFADDR 0");
+	first_time = 0;
 
 	iptoaddr(&areq.ifra_addr, ip, 0);
 	iptoaddr(&areq.ifra_mask, mask, 0);
@@ -396,6 +399,10 @@ udprecv(void *data, size_t n)
 }
 
 #else
+#include <net/if_media.h>
+
+#define ACTIVE_FLAGS (IFM_AVALID | IFM_ACTIVE)
+#define IS_ACTIVE(s) (((s) & ACTIVE_FLAGS) == ACTIVE_FLAGS)
 
 static struct in_addr dst_addr;
 static struct in_addr ip_zero;
@@ -406,7 +413,7 @@ void open_socket(const char *ifname)
 
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock == -1)
-		err(1, "socket:");
+		err(1, "socket");
 
 	if (setsockopt(sock, SOL_SOCKET, SO_BROADCAST, &set, sizeof(set)) == -1)
 		err(1, "SO_BROADCAST:");
@@ -422,6 +429,20 @@ void open_socket(const char *ifname)
 	iptoaddr(&addr, ip_zero, PORT68);
 	if (bind(sock, (void*)&addr, sizeof(addr)) != 0)
 		err(1, "bind:");
+
+	if (wait_for_link) {
+		while (1) {
+			// Must reset every time
+			struct ifmediareq ifmr = { 0 };
+			strlcpy(ifmr.ifm_name, ifname, sizeof(ifmr.ifm_name));
+			if (ioctl(sock, SIOCGIFMEDIA, &ifmr))
+				err(1, "MEDIA");
+			if (IS_ACTIVE(ifmr.ifm_status)) {
+				break;
+			}
+			usleep(999999);
+		}
+	}
 }
 
 void close_socket(void) {}
@@ -444,7 +465,7 @@ udpsend(void *data, size_t n, int broadcast)
 	iptoaddr(&addr, ip, PORT67); /* bootp server */
 	while ((sent = sendto(sock, data, n, flags, &addr, sizeof(addr))) == -1)
 		if (errno != EINTR) {
-			warn("sendto:");
+			warn("sendto");
 			break;
 		}
 

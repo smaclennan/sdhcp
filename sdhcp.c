@@ -107,6 +107,8 @@ static const unsigned char params[] = {
 /* One socket to rule them all */
 int sock = -1;
 
+int wait_for_link = 1;
+
 /* conf */
 static uint64_t hwaddr64;
 static char hostname[_POSIX_HOST_NAME_MAX + 1];
@@ -493,7 +495,7 @@ cleanexit(int unused)
 static void __attribute__((noreturn))
 usage(int rc)
 {
-	errx(rc, " [-c client_ip] [-d] [-e program] [-f] [-i] [-r resolv.conf]\n"
+	errx(rc, " [-c client_ip] [-d] [-e program] [-f] [-i] [-r resolv.conf] [-W]\n"
 		 "\t[ifname] [clientid]");
 }
 
@@ -531,7 +533,7 @@ main(int argc, char *argv[])
 {
 	int c, fast_start = 0;
 
-	while ((c = getopt(argc, argv, "c:de:fghir:B")) != EOF)
+	while ((c = getopt(argc, argv, "c:de:fghir:BW")) != EOF)
 		switch (c) {
 		case 'c': // client IP
 			if (inet_aton(optarg, &client) == 0)
@@ -560,6 +562,9 @@ main(int argc, char *argv[])
 			break;
 		case 'B':
 			always_broadcast = 1;
+			break;
+		case 'W':
+			wait_for_link = 0;
 			break;
 		default:
 			usage(1);

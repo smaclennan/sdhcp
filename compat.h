@@ -25,6 +25,7 @@
 
 extern int sock;
 extern const char *ifname;
+extern int wait_for_link;
 
 #define N_TIMERS 3
 extern int timers[];
